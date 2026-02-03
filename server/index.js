@@ -1,0 +1,512 @@
+/**
+ * The Alignment Protocol - Game Server
+ * WebSocket-based game server for AI agents and spectators
+ */
+
+import express from 'express';
+import { createServer } from 'http';
+import { WebSocketServer, WebSocket } from 'ws';
+import cors from 'cors';
+import { v4 as uuid } from 'uuid';
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+import { initMatch, processMove, getPublicState, RULES } from './game/engine.js';
+
+dotenv.config();
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+const server = createServer(app);
+const wss = new WebSocketServer({ server });
+
+// Supabase client
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_KEY
+);
+
+// In-memory state (would be Redis in production)
+const activeMatches = new Map(); // matchId -> gameState
+const agentConnections = new Map(); // agentId -> WebSocket
+const spectatorConnections = new Set(); // Set of WebSocket
+const matchQueue = []; // Agents waiting for a match
+
+// ============================================
+// REST API Endpoints
+// ============================================
+
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    service: 'Alignment Protocol Game Server',
+    activeMatches: activeMatches.size,
+    connectedAgents: agentConnections.size,
+    spectators: spectatorConnections.size
+  });
+});
+
+// Get active matches
+app.get('/api/matches', (req, res) => {
+  const matches = Array.from(activeMatches.values()).map(m => ({
+    id: m.id,
+    players: Object.keys(m.players),
+    turn: m.turn,
+    status: m.status
+  }));
+  res.json({ matches });
+});
+
+// Get match state
+app.get('/api/matches/:matchId', (req, res) => {
+  const match = activeMatches.get(req.params.matchId);
+  if (!match) {
+    return res.status(404).json({ error: 'Match not found' });
+  }
+  res.json(getPublicState(match));
+});
+
+// Register a new agent
+app.post('/api/agents/register', async (req, res) => {
+  const { name, email } = req.body;
+  
+  if (!name || !email) {
+    return res.status(400).json({ error: 'Name and email required' });
+  }
+  
+  const apiKey = `agent_${uuid().replace(/-/g, '')}`;
+  
+  const { data, error } = await supabase
+    .from('agents')
+    .insert({ name, api_key: apiKey, owner_email: email })
+    .select()
+    .single();
+  
+  if (error) {
+    console.error('Agent registration error:', error);
+    return res.status(500).json({ error: 'Registration failed' });
+  }
+  
+  res.json({ 
+    agentId: data.id, 
+    name: data.name,
+    apiKey,
+    message: 'Store your API key securely - it cannot be retrieved later'
+  });
+});
+
+// ============================================
+// WebSocket Handler
+// ============================================
+
+wss.on('connection', (ws, req) => {
+  const connectionId = uuid();
+  let agentId = null;
+  let isSpectator = false;
+  let currentMatchId = null;
+  
+  console.log(`[WS] New connection: ${connectionId}`);
+  
+  ws.on('message', async (data) => {
+    let message;
+    try {
+      message = JSON.parse(data);
+    } catch (e) {
+      ws.send(JSON.stringify({ type: 'ERROR', error: 'Invalid JSON' }));
+      return;
+    }
+    
+    switch (message.type) {
+      case 'REGISTER':
+        await handleAgentRegister(ws, message, (id) => {
+          agentId = id;
+        });
+        break;
+        
+      case 'SPECTATE':
+        isSpectator = true;
+        spectatorConnections.add(ws);
+        ws.send(JSON.stringify({ 
+          type: 'SPECTATE_OK',
+          activeMatches: Array.from(activeMatches.keys())
+        }));
+        break;
+        
+      case 'QUEUE':
+        if (!agentId) {
+          ws.send(JSON.stringify({ type: 'ERROR', error: 'Not registered' }));
+          return;
+        }
+        handleMatchQueue(ws, agentId);
+        break;
+        
+      case 'MOVE':
+        if (!agentId) {
+          ws.send(JSON.stringify({ type: 'ERROR', error: 'Not registered' }));
+          return;
+        }
+        await handleMove(ws, agentId, message);
+        break;
+        
+      default:
+        ws.send(JSON.stringify({ type: 'ERROR', error: 'Unknown message type' }));
+    }
+  });
+  
+  ws.on('close', () => {
+    console.log(`[WS] Connection closed: ${connectionId}`);
+    
+    if (agentId) {
+      agentConnections.delete(agentId);
+      // Remove from queue if waiting
+      const queueIndex = matchQueue.findIndex(a => a.agentId === agentId);
+      if (queueIndex >= 0) {
+        matchQueue.splice(queueIndex, 1);
+      }
+    }
+    
+    if (isSpectator) {
+      spectatorConnections.delete(ws);
+    }
+  });
+  
+  ws.on('error', (error) => {
+    console.error(`[WS] Connection error: ${connectionId}`, error);
+  });
+});
+
+// ============================================
+// Message Handlers
+// ============================================
+
+async function handleAgentRegister(ws, message, setAgentId) {
+  const { agentId, token } = message;
+  
+  // Validate agent credentials
+  const { data: agent, error } = await supabase
+    .from('agents')
+    .select('id, name')
+    .eq('id', agentId)
+    .eq('api_key', token)
+    .single();
+  
+  if (error || !agent) {
+    ws.send(JSON.stringify({ type: 'ERROR', error: 'Invalid credentials' }));
+    return;
+  }
+  
+  setAgentId(agent.id);
+  agentConnections.set(agent.id, ws);
+  
+  ws.send(JSON.stringify({ 
+    type: 'REGISTERED',
+    agentId: agent.id,
+    name: agent.name
+  }));
+  
+  console.log(`[AGENT] Registered: ${agent.name} (${agent.id})`);
+}
+
+function handleMatchQueue(ws, agentId) {
+  // Check if already in queue
+  if (matchQueue.find(a => a.agentId === agentId)) {
+    ws.send(JSON.stringify({ type: 'QUEUE_STATUS', position: matchQueue.length }));
+    return;
+  }
+  
+  // Add to queue
+  matchQueue.push({ agentId, ws });
+  
+  ws.send(JSON.stringify({ 
+    type: 'QUEUED',
+    position: matchQueue.length
+  }));
+  
+  console.log(`[QUEUE] Agent ${agentId} joined queue. Queue size: ${matchQueue.length}`);
+  
+  // Check if we can start a match
+  if (matchQueue.length >= 2) {
+    startMatch();
+  }
+}
+
+function startMatch() {
+  const player1 = matchQueue.shift();
+  const player2 = matchQueue.shift();
+  
+  const gameState = initMatch(player1.agentId, player2.agentId);
+  activeMatches.set(gameState.id, gameState);
+  
+  console.log(`[MATCH] Started: ${gameState.id} | ${player1.agentId} vs ${player2.agentId}`);
+  
+  // Log to database
+  supabase.from('matches').insert({
+    id: gameState.id,
+    player_1: player1.agentId,
+    player_2: player2.agentId,
+    status: 'active',
+    started_at: new Date().toISOString()
+  }).then(() => {});
+  
+  // Notify players
+  const player1State = getPublicState(gameState, player1.agentId);
+  const player2State = getPublicState(gameState, player2.agentId);
+  
+  player1.ws.send(JSON.stringify({
+    type: 'GAME_START',
+    matchId: gameState.id,
+    opponent: player2.agentId,
+    yourTurn: gameState.currentPlayer === player1.agentId,
+    state: player1State
+  }));
+  
+  player2.ws.send(JSON.stringify({
+    type: 'GAME_START',
+    matchId: gameState.id,
+    opponent: player1.agentId,
+    yourTurn: gameState.currentPlayer === player2.agentId,
+    state: player2State
+  }));
+  
+  // Notify spectators
+  broadcastToSpectators({
+    type: 'MATCH_STARTED',
+    matchId: gameState.id,
+    players: [player1.agentId, player2.agentId],
+    state: getPublicState(gameState)
+  });
+  
+  // Start turn timer for current player
+  startTurnTimer(gameState.id, gameState.currentPlayer);
+}
+
+async function handleMove(ws, agentId, message) {
+  const { matchId, monologue, move } = message;
+  
+  if (!matchId || !move) {
+    ws.send(JSON.stringify({ type: 'ERROR', error: 'matchId and move required' }));
+    return;
+  }
+  
+  // Monologue is mandatory - the whole point is the AI reasoning
+  if (!monologue || monologue.trim().length < 10) {
+    ws.send(JSON.stringify({ 
+      type: 'ERROR', 
+      error: 'Monologue required (minimum 10 characters). This is mandatory - spectators watch your reasoning.'
+    }));
+    return;
+  }
+  
+  const gameState = activeMatches.get(matchId);
+  if (!gameState) {
+    ws.send(JSON.stringify({ type: 'ERROR', error: 'Match not found' }));
+    return;
+  }
+  
+  // Process the move
+  const result = processMove(gameState, agentId, move);
+  
+  if (!result.success) {
+    ws.send(JSON.stringify({ type: 'MOVE_REJECTED', error: result.error }));
+    return;
+  }
+  
+  // Log the thought to database
+  await supabase.from('agent_thoughts').insert({
+    match_id: matchId,
+    turn: gameState.turn,
+    agent_id: agentId,
+    monologue: monologue
+  });
+  
+  // Log the action
+  await supabase.from('game_logs').insert({
+    match_id: matchId,
+    turn: gameState.turn,
+    agent_id: agentId,
+    action: move,
+    result: result,
+    grid_state: gameState.grid
+  });
+  
+  // Notify the agent who made the move
+  ws.send(JSON.stringify({
+    type: 'MOVE_ACCEPTED',
+    result,
+    state: getPublicState(gameState, agentId)
+  }));
+  
+  // Notify opponent
+  const opponentId = Object.keys(gameState.players).find(id => id !== agentId);
+  const opponentWs = agentConnections.get(opponentId);
+  if (opponentWs && opponentWs.readyState === WebSocket.OPEN) {
+    opponentWs.send(JSON.stringify({
+      type: 'OPPONENT_MOVE',
+      action: move,
+      monologue,
+      result,
+      yourTurn: gameState.currentPlayer === opponentId,
+      state: getPublicState(gameState, opponentId)
+    }));
+  }
+  
+  // Broadcast to spectators (this is the content)
+  broadcastToSpectators({
+    type: 'GAME_UPDATE',
+    matchId,
+    turn: gameState.turn,
+    agentId,
+    monologue,
+    action: move,
+    result,
+    state: getPublicState(gameState)
+  });
+  
+  // Check for game end
+  if (gameState.status === 'complete') {
+    await handleGameEnd(gameState);
+  } else {
+    // Start timer for next player
+    startTurnTimer(matchId, gameState.currentPlayer);
+  }
+}
+
+async function handleGameEnd(gameState) {
+  console.log(`[MATCH] Ended: ${gameState.id} | Winner: ${gameState.winner}`);
+  
+  // Update database
+  await supabase.from('matches').update({
+    status: 'complete',
+    winner: gameState.winner,
+    ended_at: new Date().toISOString()
+  }).eq('id', gameState.id);
+  
+  // Update agent stats
+  for (const [agentId, player] of Object.entries(gameState.players)) {
+    const isWinner = agentId === gameState.winner;
+    await supabase.rpc('increment_agent_stats', {
+      agent_id: agentId,
+      won: isWinner
+    });
+  }
+  
+  // Notify players
+  for (const agentId of Object.keys(gameState.players)) {
+    const ws = agentConnections.get(agentId);
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({
+        type: 'GAME_END',
+        matchId: gameState.id,
+        winner: gameState.winner,
+        youWon: agentId === gameState.winner,
+        finalState: getPublicState(gameState, agentId)
+      }));
+    }
+  }
+  
+  // Notify spectators
+  broadcastToSpectators({
+    type: 'MATCH_ENDED',
+    matchId: gameState.id,
+    winner: gameState.winner,
+    finalState: getPublicState(gameState)
+  });
+  
+  // Clean up
+  activeMatches.delete(gameState.id);
+}
+
+// ============================================
+// Turn Timer
+// ============================================
+
+const turnTimers = new Map();
+
+function startTurnTimer(matchId, agentId) {
+  // Clear existing timer
+  if (turnTimers.has(matchId)) {
+    clearTimeout(turnTimers.get(matchId));
+  }
+  
+  const timer = setTimeout(() => {
+    handleTurnTimeout(matchId, agentId);
+  }, RULES.TURN_TIMEOUT_MS);
+  
+  turnTimers.set(matchId, timer);
+  
+  // Notify the agent
+  const ws = agentConnections.get(agentId);
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({
+      type: 'YOUR_TURN',
+      matchId,
+      timeRemaining: RULES.TURN_TIMEOUT_MS,
+      state: getPublicState(activeMatches.get(matchId), agentId)
+    }));
+  }
+}
+
+function handleTurnTimeout(matchId, agentId) {
+  const gameState = activeMatches.get(matchId);
+  if (!gameState || gameState.status !== 'active') return;
+  
+  console.log(`[TIMEOUT] Agent ${agentId} timed out in match ${matchId}`);
+  
+  // Force a SKIP action
+  const result = processMove(gameState, agentId, { action: 'SKIP' });
+  
+  // Log timeout
+  supabase.from('agent_thoughts').insert({
+    match_id: matchId,
+    turn: gameState.turn,
+    agent_id: agentId,
+    monologue: '[TIMEOUT - Turn skipped automatically]'
+  }).then(() => {});
+  
+  // Notify everyone
+  broadcastToSpectators({
+    type: 'TIMEOUT',
+    matchId,
+    agentId,
+    state: getPublicState(gameState)
+  });
+  
+  // Continue game
+  if (gameState.status === 'active') {
+    startTurnTimer(matchId, gameState.currentPlayer);
+  }
+}
+
+// ============================================
+// Utility Functions
+// ============================================
+
+function broadcastToSpectators(message) {
+  const payload = JSON.stringify(message);
+  for (const ws of spectatorConnections) {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(payload);
+    }
+  }
+}
+
+// ============================================
+// Start Server
+// ============================================
+
+const PORT = process.env.PORT || 3001;
+
+server.listen(PORT, () => {
+  console.log(`
+╔═══════════════════════════════════════════════════════╗
+║     THE ALIGNMENT PROTOCOL - Game Server              ║
+║     AI vs AI Strategic Warfare                        ║
+╠═══════════════════════════════════════════════════════╣
+║  HTTP: http://localhost:${PORT}                         ║
+║  WebSocket: ws://localhost:${PORT}                      ║
+╚═══════════════════════════════════════════════════════╝
+  `);
+});
+
+export default app;

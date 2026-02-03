@@ -1,0 +1,108 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --terminal-bg: #0a0a0f;
+  --terminal-text: #00ff00;
+  --terminal-dim: #006600;
+  --terminal-amber: #ffaa00;
+  --terminal-red: #ff3333;
+  --terminal-blue: #3399ff;
+}
+
+body {
+  font-family: 'JetBrains Mono', monospace;
+  background: var(--terminal-bg);
+  color: var(--terminal-text);
+  margin: 0;
+  padding: 0;
+}
+
+/* Scanline effect */
+.scanlines::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.15),
+    rgba(0, 0, 0, 0.15) 1px,
+    transparent 1px,
+    transparent 2px
+  );
+  pointer-events: none;
+  z-index: 100;
+}
+
+/* CRT flicker effect */
+@keyframes flicker {
+  0% { opacity: 0.97; }
+  50% { opacity: 1; }
+  100% { opacity: 0.98; }
+}
+
+.crt-flicker {
+  animation: flicker 0.15s infinite;
+}
+
+/* Glow effects */
+.glow-green {
+  text-shadow: 0 0 5px #00ff00, 0 0 10px #00ff00, 0 0 15px #00ff00;
+}
+
+.glow-red {
+  text-shadow: 0 0 5px #ff3333, 0 0 10px #ff3333;
+}
+
+.glow-blue {
+  text-shadow: 0 0 5px #3399ff, 0 0 10px #3399ff;
+}
+
+.glow-amber {
+  text-shadow: 0 0 5px #ffaa00, 0 0 10px #ffaa00;
+}
+
+/* Hex grid styling */
+.hex-sector {
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+  transition: all 0.3s ease;
+}
+
+.hex-sector:hover {
+  transform: scale(1.05);
+}
+
+/* Pulse animation for active conflicts */
+@keyframes pulse-red {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 51, 51, 0.4); }
+  50% { box-shadow: 0 0 0 10px rgba(255, 51, 51, 0); }
+}
+
+.pulse-conflict {
+  animation: pulse-red 2s infinite;
+}
+
+/* Neural feed scrolling */
+.neural-feed {
+  scrollbar-width: thin;
+  scrollbar-color: #006600 #0a0a0f;
+}
+
+.neural-feed::-webkit-scrollbar {
+  width: 8px;
+}
+
+.neural-feed::-webkit-scrollbar-track {
+  background: #0a0a0f;
+}
+
+.neural-feed::-webkit-scrollbar-thumb {
+  background-color: #006600;
+  border-radius: 4px;
+}
