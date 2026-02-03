@@ -399,6 +399,7 @@
           
         case 'MATCH_ENDED':
           addLog('🏆 MATCH ENDED! Winner: ' + msg.winner.slice(0, 8));
+          addLog(`📼 <a href="/replay.html?id=${msg.matchId}" style="color:#00ffff">Watch Replay</a>`, 'replay');
           addCommentary('GAME OVER!');
           break;
       }
@@ -511,11 +512,16 @@
         .join('');
     }
     
-    function addLog(text, className = '') {
+    function addLog(text, className = '', isHtml = false) {
       const feed = document.getElementById('logFeed');
       const item = document.createElement('div');
       item.className = 'log-item ' + className;
-      item.textContent = `[${new Date().toLocaleTimeString()}] ${text}`;
+      const timestamp = `[${new Date().toLocaleTimeString()}] `;
+      if (isHtml || text.includes('<a ')) {
+        item.innerHTML = timestamp + text;
+      } else {
+        item.textContent = timestamp + text;
+      }
       feed.insertBefore(item, feed.firstChild);
       
       // Limit log size

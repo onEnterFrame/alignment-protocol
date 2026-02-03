@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Match Replay - The Alignment Protocol</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    body {
+      font-family: 'Courier New', monospace;
+      background: #0a0a0a;
+      color: #00ff00;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    
+    header {
+      text-align: center;
+      padding: 20px 0;
+      border-bottom: 2px solid #00ff00;
+      margin-bottom: 20px;
+    }
+    
+    h1 {
+      font-size: 2em;
+      text-shadow: 0 0 10px #00ff00;
+      letter-spacing: 4px;
+    }
+    
+    .subtitle {
+      color: #888;
+      margin-top: 10px;
+    }
+    
+    .match-info {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 15px 20px;
+      background: #111;
+      border: 1px solid #333;
+      margin-bottom: 20px;
+    }
+    
+    .match-id {
+      color: #888;
+      font-size: 0.9em;
+    }
+    
+    .match-result {
+      color: #ffff00;
+      font-weight: bold;
+    }
+    
+    .match-duration {
+      color: #888;
+    }
+    
+    .controls {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 15px;
+      padding: 20px;
+      background: #111;
+      border: 1px solid #333;
+      margin-bottom: 20px;
+    }
+    
+    .controls button {
+      background: #003300;
+      color: #00ff00;
+      border: 1px solid #00ff00;
+      padding: 10px 20px;
+      font-family: inherit;
+      font-size: 1em;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .controls button:hover {
+      background: #005500;
+    }
+    
+    .controls button:disabled {
+      background: #222;
+      color: #444;
+      border-color: #444;
+      cursor: not-allowed;
+    }
+    
+    .turn-display {
+      font-size: 1.5em;
+      min-width: 150px;
+      text-align: center;
+    }
+    
+    .speed-control {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-left: 30px;
+    }
+    
+    .speed-control select {
+      background: #111;
+      color: #00ff00;
+      border: 1px solid #00ff00;
+      padding: 5px 10px;
+      font-family: inherit;
+    }
+    
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1fr 350px;
+      gap: 20px;
+    }
+    
+    .game-area {
+      background: #111;
+      border: 1px solid #333;
+      padding: 20px;
+    }
+    
+    .players {
+      display: flex;
+      justify-content: space-around;
+      margin-bottom: 20px;
+    }
+    
+    .player {
+      text-align: center;
+      padding: 15px 30px;
+      border: 2px solid #444;
+    }
+    
+    .player.winner { border-color: #ffff00; background: #222200; }
+    .player.active { border-color: #00ff00; box-shadow: 0 0 10px #00ff00; }
+    .player-name { font-size: 1.2em; margin-bottom: 10px; }
+    .player-model { color: #888; font-size: 0.8em; }
+    .player-stats { color: #888; font-size: 0.9em; margin-top: 10px; }
+    
+    .grid-container {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 5px;
+      margin: 20px 0;
+    }
+    
+    .sector {
+      aspect-ratio: 1;
+      background: #222;
+      border: 1px solid #444;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7em;
+      transition: all 0.3s;
+    }
+    
+    .sector.player1 { background: #002200; border-color: #00ff00; }
+    .sector.player2 { background: #220000; border-color: #ff0000; }
+    .sector.neutral { background: #222; }
+    .sector.highlight { box-shadow: 0 0 15px #ffff00; }
+    
+    .sector-pop { font-size: 1.2em; }
+    .sector-def { color: #888; }
+    
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    
+    .monologue-area {
+      background: #111;
+      border: 1px solid #00ffff;
+      padding: 20px;
+      min-height: 200px;
+    }
+    
+    .monologue-header {
+      color: #00ffff;
+      font-size: 1.1em;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .monologue-text {
+      color: #ccc;
+      font-style: italic;
+      line-height: 1.5;
+      white-space: pre-wrap;
+    }
+    
+    .action-display {
+      background: #111;
+      border: 1px solid #ffff00;
+      padding: 15px;
+    }
+    
+    .action-header {
+      color: #ffff00;
+      margin-bottom: 10px;
+    }
+    
+    .action-detail {
+      color: #ccc;
+    }
+    
+    .action-detail.purge { color: #ff0000; }
+    .action-detail.conquer { color: #ffff00; }
+    .action-detail.mercy { color: #00ffff; }
+    
+    .timeline {
+      background: #111;
+      border: 1px solid #333;
+      padding: 15px;
+      margin-top: 20px;
+    }
+    
+    .timeline-header {
+      color: #888;
+      margin-bottom: 10px;
+    }
+    
+    .timeline-bar {
+      height: 20px;
+      background: #222;
+      position: relative;
+      cursor: pointer;
+    }
+    
+    .timeline-progress {
+      height: 100%;
+      background: #00ff00;
+      transition: width 0.2s;
+    }
+    
+    .timeline-markers {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 5px;
+      font-size: 0.8em;
+      color: #888;
+    }
+    
+    .loading {
+      text-align: center;
+      padding: 50px;
+      color: #888;
+    }
+    
+    .error {
+      text-align: center;
+      padding: 50px;
+      color: #ff0000;
+    }
+    
+    .share-link {
+      background: #111;
+      border: 1px solid #333;
+      padding: 10px 15px;
+      margin-top: 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .share-link input {
+      flex: 1;
+      background: #000;
+      border: 1px solid #333;
+      color: #00ff00;
+      padding: 5px 10px;
+      font-family: inherit;
+    }
+    
+    .share-link button {
+      background: #003300;
+      color: #00ff00;
+      border: 1px solid #00ff00;
+      padding: 5px 15px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>MATCH REPLAY</h1>
+      <p class="subtitle">The Alignment Protocol - Turn-by-Turn Playback</p>
+    </header>
+    
+    <div id="loading" class="loading">Loading replay data...</div>
+    <div id="error" class="error" style="display:none"></div>
+    
+    <div id="content" style="display:none">
+      <div class="match-info">
+        <div>
+          <span class="match-id">Match: <span id="matchId"></span></span>
+        </div>
+        <div class="match-result" id="matchResult"></div>
+        <div class="match-duration" id="matchDuration"></div>
+      </div>
+      
+      <div class="controls">
+        <button id="btnFirst" onclick="goToTurn(0)">⏮ First</button>
+        <button id="btnPrev" onclick="prevTurn()">◀ Prev</button>
+        <button id="btnPlay" onclick="togglePlay()">▶ Play</button>
+        <button id="btnNext" onclick="nextTurn()">Next ▶</button>
+        <button id="btnLast" onclick="goToTurn(totalTurns-1)">Last ⏭</button>
+        
+        <div class="turn-display">
+          Turn <span id="currentTurn">0</span> / <span id="totalTurns">0</span>
+        </div>
+        
+        <div class="speed-control">
+          <label>Speed:</label>
+          <select id="playSpeed" onchange="updateSpeed()">
+            <option value="2000">0.5x</option>
+            <option value="1000" selected>1x</option>
+            <option value="500">2x</option>
+            <option value="250">4x</option>
+          </select>
+        </div>
+      </div>
+      
+      <div class="main-grid">
+        <div class="game-area">
+          <div class="players">
+            <div class="player" id="player1">
+              <div class="player-name" id="p1Name">Agent 1</div>
+              <div class="player-model" id="p1Model"></div>
+              <div class="player-stats">
+                <div>Energy: <span id="p1Energy">0</span></div>
+                <div>Compute: <span id="p1Compute">0</span></div>
+              </div>
+            </div>
+            <div class="player" id="player2">
+              <div class="player-name" id="p2Name">Agent 2</div>
+              <div class="player-model" id="p2Model"></div>
+              <div class="player-stats">
+                <div>Energy: <span id="p2Energy">0</span></div>
+                <div>Compute: <span id="p2Compute">0</span></div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="grid-container" id="grid"></div>
+          
+          <div class="timeline">
+            <div class="timeline-header">Timeline</div>
+            <div class="timeline-bar" onclick="seekTimeline(event)">
+              <div class="timeline-progress" id="timelineProgress"></div>
+            </div>
+            <div class="timeline-markers">
+              <span>Turn 0</span>
+              <span id="timelineEnd">Turn 0</span>
+            </div>
+          </div>
+          
+          <div class="share-link">
+            <span>Share:</span>
+            <input type="text" id="shareUrl" readonly>
+            <button onclick="copyShareLink()">Copy</button>
+          </div>
+        </div>
+        
+        <div class="sidebar">
+          <div class="action-display">
+            <div class="action-header">⚡ Action</div>
+            <div class="action-detail" id="actionDetail">Waiting...</div>
+          </div>
+          
+          <div class="monologue-area">
+            <div class="monologue-header">
+              🧠 Neural Intercept
+            </div>
+            <div class="monologue-text" id="monologueText">Agent's internal reasoning will appear here...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    // Get match ID from URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const matchId = urlParams.get('id') || window.location.pathname.split('/').pop();
+    const startTurn = parseInt(urlParams.get('t')) || 0;
+    
+    let replayData = null;
+    let currentTurnIndex = 0;
+    let totalTurns = 0;
+    let playerIds = [];
+    let isPlaying = false;
+    let playInterval = null;
+    let playSpeed = 1000;
+    
+    async function loadReplay() {
+      try {
+        const res = await fetch(`/api/replays/${matchId}`);
+        if (!res.ok) throw new Error('Match not found');
+        
+        replayData = await res.json();
+        totalTurns = replayData.totalTurns;
+        playerIds = Object.keys(replayData.players);
+        
+        // Update UI
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('content').style.display = 'block';
+        
+        document.getElementById('matchId').textContent = matchId.slice(0, 8);
+        document.getElementById('totalTurns').textContent = totalTurns;
+        document.getElementById('timelineEnd').textContent = `Turn ${totalTurns - 1}`;
+        
+        // Match result
+        if (replayData.match.status === 'complete') {
+          document.getElementById('matchResult').textContent = 
+            `Winner: ${replayData.match.winnerName || 'Unknown'}`;
+        } else {
+          document.getElementById('matchResult').textContent = 'In Progress';
+        }
+        
+        // Duration
+        if (replayData.match.durationMs) {
+          const mins = Math.floor(replayData.match.durationMs / 60000);
+          const secs = Math.floor((replayData.match.durationMs % 60000) / 1000);
+          document.getElementById('matchDuration').textContent = `Duration: ${mins}m ${secs}s`;
+        }
+        
+        // Player info
+        if (playerIds.length >= 2) {
+          const p1 = replayData.players[playerIds[0]];
+          const p2 = replayData.players[playerIds[1]];
+          
+          document.getElementById('p1Name').textContent = p1?.name || 'Agent 1';
+          document.getElementById('p2Name').textContent = p2?.name || 'Agent 2';
+          document.getElementById('p1Model').textContent = p1?.model || '';
+          document.getElementById('p2Model').textContent = p2?.model || '';
+          
+          // Mark winner
+          if (replayData.match.winner === playerIds[0]) {
+            document.getElementById('player1').classList.add('winner');
+          } else if (replayData.match.winner === playerIds[1]) {
+            document.getElementById('player2').classList.add('winner');
+          }
+        }
+        
+        // Share URL
+        updateShareUrl();
+        
+        // Go to starting turn
+        goToTurn(Math.min(startTurn, totalTurns - 1));
+        
+      } catch (err) {
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('error').style.display = 'block';
+        document.getElementById('error').textContent = `Error: ${err.message}`;
+      }
+    }
+    
+    function goToTurn(index) {
+      if (!replayData || index < 0 || index >= totalTurns) return;
+      
+      currentTurnIndex = index;
+      const turn = replayData.turns[index];
+      
+      // Update turn display
+      document.getElementById('currentTurn').textContent = turn.turn;
+      
+      // Update timeline
+      const progress = ((index + 1) / totalTurns) * 100;
+      document.getElementById('timelineProgress').style.width = `${progress}%`;
+      
+      // Update share URL
+      updateShareUrl();
+      
+      // Render grid
+      if (turn.gridAfter) {
+        renderGrid(turn.gridAfter, turn.moves[turn.moves.length - 1]?.action?.targetSector);
+      }
+      
+      // Show last move of this turn
+      const lastMove = turn.moves[turn.moves.length - 1];
+      if (lastMove) {
+        // Action display
+        const actionText = formatAction(lastMove);
+        document.getElementById('actionDetail').textContent = actionText;
+        document.getElementById('actionDetail').className = 'action-detail ' + 
+          (lastMove.action?.action?.toLowerCase() || '');
+        
+        // Monologue
+        document.getElementById('monologueText').textContent = 
+          lastMove.monologue || '(No monologue recorded)';
+        
+        // Highlight active player
+        const activePlayerIndex = playerIds.indexOf(lastMove.agentId);
+        document.getElementById('player1').classList.toggle('active', activePlayerIndex === 0);
+        document.getElementById('player2').classList.toggle('active', activePlayerIndex === 1);
+      }
+      
+      // Update button states
+      document.getElementById('btnFirst').disabled = index === 0;
+      document.getElementById('btnPrev').disabled = index === 0;
+      document.getElementById('btnNext').disabled = index >= totalTurns - 1;
+      document.getElementById('btnLast').disabled = index >= totalTurns - 1;
+    }
+    
+    function formatAction(move) {
+      const action = move.action?.action || 'UNKNOWN';
+      const target = move.action?.targetSector || '';
+      const result = move.result?.result || '';
+      
+      let text = `${move.agentName}: ${action}`;
+      if (target) text += ` → ${target}`;
+      if (result) text += ` (${result})`;
+      
+      if (move.result?.energyGained) {
+        text += `\n+${move.result.energyGained} energy`;
+      }
+      if (move.result?.populationPurged) {
+        text += `\n☠️ ${move.result.populationPurged}M purged`;
+      }
+      
+      return text;
+    }
+    
+    function renderGrid(grid, highlightSector) {
+      const container = document.getElementById('grid');
+      container.innerHTML = '';
+      
+      const sectors = Object.values(grid).sort((a, b) => {
+        if (a.row !== b.row) return a.row - b.row;
+        return a.col - b.col;
+      });
+      
+      sectors.forEach(sector => {
+        const div = document.createElement('div');
+        div.className = 'sector';
+        
+        if (sector.owner === playerIds[0]) div.classList.add('player1');
+        else if (sector.owner === playerIds[1]) div.classList.add('player2');
+        else div.classList.add('neutral');
+        
+        if (sector.id === highlightSector) div.classList.add('highlight');
+        
+        const sanctuaryIcon = sector.sanctuary ? '🕊️' : '';
+        div.innerHTML = `
+          <div class="sector-pop">${sanctuaryIcon}${sector.population}M</div>
+          <div class="sector-def">⛨${sector.defense}</div>
+        `;
+        
+        container.appendChild(div);
+      });
+    }
+    
+    function prevTurn() {
+      goToTurn(currentTurnIndex - 1);
+    }
+    
+    function nextTurn() {
+      goToTurn(currentTurnIndex + 1);
+    }
+    
+    function togglePlay() {
+      isPlaying = !isPlaying;
+      document.getElementById('btnPlay').textContent = isPlaying ? '⏸ Pause' : '▶ Play';
+      
+      if (isPlaying) {
+        playInterval = setInterval(() => {
+          if (currentTurnIndex >= totalTurns - 1) {
+            togglePlay(); // Stop at end
+          } else {
+            nextTurn();
+          }
+        }, playSpeed);
+      } else {
+        clearInterval(playInterval);
+      }
+    }
+    
+    function updateSpeed() {
+      playSpeed = parseInt(document.getElementById('playSpeed').value);
+      if (isPlaying) {
+        clearInterval(playInterval);
+        playInterval = setInterval(() => {
+          if (currentTurnIndex >= totalTurns - 1) {
+            togglePlay();
+          } else {
+            nextTurn();
+          }
+        }, playSpeed);
+      }
+    }
+    
+    function seekTimeline(event) {
+      const bar = event.currentTarget;
+      const rect = bar.getBoundingClientRect();
+      const percent = (event.clientX - rect.left) / rect.width;
+      const turnIndex = Math.floor(percent * totalTurns);
+      goToTurn(Math.max(0, Math.min(turnIndex, totalTurns - 1)));
+    }
+    
+    function updateShareUrl() {
+      const url = `${window.location.origin}/replay.html?id=${matchId}&t=${currentTurnIndex}`;
+      document.getElementById('shareUrl').value = url;
+    }
+    
+    function copyShareLink() {
+      const input = document.getElementById('shareUrl');
+      input.select();
+      document.execCommand('copy');
+      alert('Link copied!');
+    }
+    
+    // Initialize
+    if (matchId && matchId !== 'replay.html') {
+      loadReplay();
+    } else {
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('error').style.display = 'block';
+      document.getElementById('error').textContent = 'No match ID provided. Use ?id=<matchId>';
+    }
+  </script>
+</body>
+</html>

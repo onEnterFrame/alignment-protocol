@@ -216,6 +216,159 @@ app.get('/api/agents/:agentId', async (req, res) => {
   });
 });
 
+// List recent completed matches (for replay browser)
+app.get('/api/replays', async (req, res) => {
+  const { limit = 20 } = req.query;
+  
+  const { data: matches, error } = await supabase
+    .from('matches')
+    .select(`
+      id, status, winner, started_at, ended_at,
+      player_1, player_2
+    `)
+    .eq('status', 'complete')
+    .order('ended_at', { ascending: false })
+    .limit(parseInt(limit));
+  
+  if (error) {
+    return res.status(500).json({ error: 'Failed to fetch matches' });
+  }
+  
+  // Get all player IDs
+  const playerIds = new Set();
+  for (const m of matches) {
+    if (m.player_1) playerIds.add(m.player_1);
+    if (m.player_2) playerIds.add(m.player_2);
+  }
+  
+  // Fetch player names
+  const { data: players } = await supabase
+    .from('agents')
+    .select('id, name, model')
+    .in('id', Array.from(playerIds));
+  
+  const playerMap = {};
+  for (const p of (players || [])) {
+    playerMap[p.id] = p;
+  }
+  
+  // Build response
+  const replays = matches.map(m => ({
+    id: m.id,
+    player1: playerMap[m.player_1]?.name || 'Unknown',
+    player2: playerMap[m.player_2]?.name || 'Unknown',
+    winner: playerMap[m.winner]?.name || null,
+    endedAt: m.ended_at,
+    durationMs: m.ended_at && m.started_at 
+      ? new Date(m.ended_at) - new Date(m.started_at)
+      : null
+  }));
+  
+  res.json({ replays });
+});
+
+// Get full match replay data
+app.get('/api/replays/:matchId', async (req, res) => {
+  const { matchId } = req.params;
+  
+  // Get match metadata
+  const { data: match, error: matchError } = await supabase
+    .from('matches')
+    .select(`
+      id, status, winner, started_at, ended_at,
+      player_1, player_2
+    `)
+    .eq('id', matchId)
+    .single();
+  
+  if (matchError || !match) {
+    return res.status(404).json({ error: 'Match not found' });
+  }
+  
+  // Get player info
+  const playerIds = [match.player_1, match.player_2].filter(Boolean);
+  const { data: players } = await supabase
+    .from('agents')
+    .select('id, name, model, model_provider, avatar_url')
+    .in('id', playerIds);
+  
+  const playerMap = {};
+  for (const p of (players || [])) {
+    playerMap[p.id] = p;
+  }
+  
+  // Get all moves with grid state
+  const { data: moves, error: movesError } = await supabase
+    .from('game_logs')
+    .select('turn, agent_id, action, result, grid_state, created_at')
+    .eq('match_id', matchId)
+    .order('turn', { ascending: true })
+    .order('created_at', { ascending: true });
+  
+  if (movesError) {
+    return res.status(500).json({ error: 'Failed to fetch moves' });
+  }
+  
+  // Get all monologues
+  const { data: thoughts } = await supabase
+    .from('agent_thoughts')
+    .select('turn, agent_id, monologue, created_at')
+    .eq('match_id', matchId)
+    .order('turn', { ascending: true })
+    .order('created_at', { ascending: true });
+  
+  // Build turn-by-turn replay data
+  const turns = [];
+  let currentTurn = -1;
+  let turnData = null;
+  
+  for (const move of (moves || [])) {
+    if (move.turn !== currentTurn) {
+      if (turnData) turns.push(turnData);
+      currentTurn = move.turn;
+      turnData = { 
+        turn: currentTurn, 
+        moves: [],
+        gridAfter: null
+      };
+    }
+    
+    // Find matching monologue
+    const thought = (thoughts || []).find(
+      t => t.turn === move.turn && t.agent_id === move.agent_id
+    );
+    
+    turnData.moves.push({
+      agentId: move.agent_id,
+      agentName: playerMap[move.agent_id]?.name || 'Unknown',
+      action: move.action,
+      result: move.result,
+      monologue: thought?.monologue || null,
+      timestamp: move.created_at
+    });
+    
+    turnData.gridAfter = move.grid_state;
+  }
+  if (turnData) turns.push(turnData);
+  
+  res.json({
+    match: {
+      id: match.id,
+      status: match.status,
+      winner: match.winner,
+      winnerName: playerMap[match.winner]?.name || null,
+      startedAt: match.started_at,
+      endedAt: match.ended_at,
+      durationMs: match.ended_at && match.started_at 
+        ? new Date(match.ended_at) - new Date(match.started_at)
+        : null
+    },
+    players: playerMap,
+    totalTurns: turns.length,
+    turns
+  });
+});
+
 // Get leaderboard
 app.get('/api/leaderboard', async (req, res) => {
   const { game = 'alignment-protocol', limit = 20 } = req.query;
