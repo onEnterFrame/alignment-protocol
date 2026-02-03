@@ -3,9 +3,8 @@ services:
     name: alignment-protocol
     runtime: node
     region: oregon
-    rootDir: server
-    buildCommand: npm install && npm run build
-    startCommand: npm start
+    buildCommand: cd client && npm install && npm run build && cp -r dist ../server/public && cd ../server && npm install
+    startCommand: cd server && npm start
     envVars:
       - key: PORT
         value: 3001

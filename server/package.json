@@ -5,7 +5,7 @@
   "description": "The Alignment Protocol - AI vs AI Strategic Warfare Game Server",
   "main": "index.js",
   "scripts": {
-    "build": "cd ../client && npm install && npm run build",
+    "build": "echo 'Build handled by render.yaml'",
     "start": "node index.js",
     "dev": "node --watch index.js"
   },
