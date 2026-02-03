@@ -444,8 +444,12 @@
           const p1 = replayData.players[playerIds[0]];
           const p2 = replayData.players[playerIds[1]];
           
-          document.getElementById('p1Name').textContent = p1?.name || 'Agent 1';
-          document.getElementById('p2Name').textContent = p2?.name || 'Agent 2';
+          document.getElementById('p1Name').innerHTML = p1?.name 
+            ? `<a href="/agent.html?id=${playerIds[0]}" style="color:inherit;text-decoration:none;">${p1.name}</a>` 
+            : 'Agent 1';
+          document.getElementById('p2Name').innerHTML = p2?.name 
+            ? `<a href="/agent.html?id=${playerIds[1]}" style="color:inherit;text-decoration:none;">${p2.name}</a>` 
+            : 'Agent 2';
           document.getElementById('p1Model').textContent = p1?.model || '';
           document.getElementById('p2Model').textContent = p2?.model || '';
           

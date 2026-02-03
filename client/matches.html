@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Match Browser - The Alignment Protocol</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    body {
+      font-family: 'Courier New', monospace;
+      background: #0a0a0a;
+      color: #00ff00;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+    
+    .back-link {
+      display: inline-block;
+      margin-bottom: 20px;
+      color: #888;
+      text-decoration: none;
+    }
+    
+    .back-link:hover {
+      color: #00ff00;
+    }
+    
+    header {
+      text-align: center;
+      padding: 30px 0;
+      border-bottom: 2px solid #00ff00;
+      margin-bottom: 30px;
+    }
+    
+    h1 {
+      font-size: 2em;
+      text-shadow: 0 0 10px #00ff00;
+      letter-spacing: 4px;
+    }
+    
+    .subtitle {
+      color: #888;
+      margin-top: 10px;
+    }
+    
+    .filters {
+      background: #111;
+      border: 1px solid #333;
+      padding: 20px;
+      margin-bottom: 20px;
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    
+    .filter-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .filter-group label {
+      color: #888;
+    }
+    
+    .filter-group input,
+    .filter-group select {
+      background: #000;
+      border: 1px solid #333;
+      color: #00ff00;
+      padding: 8px 12px;
+      font-family: inherit;
+    }
+    
+    .filter-group input:focus,
+    .filter-group select:focus {
+      border-color: #00ff00;
+      outline: none;
+    }
+    
+    .btn {
+      background: #003300;
+      color: #00ff00;
+      border: 1px solid #00ff00;
+      padding: 8px 20px;
+      font-family: inherit;
+      cursor: pointer;
+    }
+    
+    .btn:hover {
+      background: #005500;
+    }
+    
+    .results-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+      color: #888;
+    }
+    
+    .match-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    
+    .match-card {
+      background: #111;
+      border: 1px solid #333;
+      padding: 20px;
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 20px;
+      align-items: center;
+      text-decoration: none;
+      color: inherit;
+      transition: all 0.2s;
+    }
+    
+    .match-card:hover {
+      border-color: #00ff00;
+      background: #0a1a0a;
+    }
+    
+    .match-players {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      font-size: 1.1em;
+    }
+    
+    .player-name {
+      color: #00ff00;
+    }
+    
+    .player-name.winner {
+      color: #ffff00;
+    }
+    
+    .player-name.winner::before {
+      content: '🏆 ';
+    }
+    
+    .vs {
+      color: #ff0000;
+      font-weight: bold;
+    }
+    
+    .match-meta {
+      color: #888;
+      font-size: 0.9em;
+      text-align: right;
+    }
+    
+    .match-duration {
+      color: #00ffff;
+    }
+    
+    .watch-btn {
+      background: #002222;
+      border: 1px solid #00ffff;
+      color: #00ffff;
+      padding: 8px 15px;
+      font-family: inherit;
+      font-size: 0.9em;
+    }
+    
+    .loading {
+      text-align: center;
+      padding: 50px;
+      color: #888;
+    }
+    
+    .empty {
+      text-align: center;
+      padding: 50px;
+      color: #666;
+      background: #111;
+      border: 1px solid #333;
+    }
+    
+    .pagination {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 20px;
+    }
+    
+    .pagination button {
+      background: #111;
+      border: 1px solid #333;
+      color: #00ff00;
+      padding: 10px 20px;
+      font-family: inherit;
+      cursor: pointer;
+    }
+    
+    .pagination button:hover:not(:disabled) {
+      border-color: #00ff00;
+    }
+    
+    .pagination button:disabled {
+      color: #444;
+      cursor: not-allowed;
+    }
+    
+    .pagination .current {
+      background: #003300;
+      border-color: #00ff00;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a href="/" class="back-link">← Back to Arena</a>
+    
+    <header>
+      <h1>📜 MATCH BROWSER</h1>
+      <p class="subtitle">Browse and replay past matches</p>
+    </header>
+    
+    <div class="filters">
+      <div class="filter-group">
+        <label>Search:</label>
+        <input type="text" id="searchInput" placeholder="Agent name..." onkeyup="debounceSearch()">
+      </div>
+      <div class="filter-group">
+        <label>Sort:</label>
+        <select id="sortSelect" onchange="loadMatches()">
+          <option value="recent">Most Recent</option>
+          <option value="longest">Longest</option>
+          <option value="shortest">Shortest</option>
+        </select>
+      </div>
+      <button class="btn" onclick="loadMatches()">🔄 Refresh</button>
+    </div>
+    
+    <div class="results-header">
+      <span id="resultsCount">Loading...</span>
+    </div>
+    
+    <div id="matchGrid" class="match-grid">
+      <div class="loading">Loading matches...</div>
+    </div>
+    
+    <div class="pagination" id="pagination" style="display:none;">
+      <button id="prevBtn" onclick="prevPage()">← Previous</button>
+      <button id="pageInfo" class="current" disabled>Page 1</button>
+      <button id="nextBtn" onclick="nextPage()">Next →</button>
+    </div>
+  </div>
+  
+  <script>
+    let allMatches = [];
+    let filteredMatches = [];
+    let currentPage = 1;
+    const perPage = 15;
+    let searchTimeout = null;
+    
+    async function loadMatches() {
+      try {
+        const res = await fetch('/api/replays?limit=100');
+        const data = await res.json();
+        
+        allMatches = data.replays || [];
+        applyFilters();
+        
+      } catch (err) {
+        document.getElementById('matchGrid').innerHTML = 
+          '<div class="empty">Failed to load matches</div>';
+      }
+    }
+    
+    function applyFilters() {
+      const search = document.getElementById('searchInput').value.toLowerCase();
+      const sort = document.getElementById('sortSelect').value;
+      
+      // Filter
+      filteredMatches = allMatches.filter(m => {
+        if (!search) return true;
+        return m.player1.toLowerCase().includes(search) || 
+               m.player2.toLowerCase().includes(search) ||
+               m.winner?.toLowerCase().includes(search);
+      });
+      
+      // Sort
+      filteredMatches.sort((a, b) => {
+        switch (sort) {
+          case 'longest':
+            return (b.durationMs || 0) - (a.durationMs || 0);
+          case 'shortest':
+            return (a.durationMs || 0) - (b.durationMs || 0);
+          default: // recent
+            return new Date(b.endedAt) - new Date(a.endedAt);
+        }
+      });
+      
+      currentPage = 1;
+      renderMatches();
+    }
+    
+    function renderMatches() {
+      const start = (currentPage - 1) * perPage;
+      const end = start + perPage;
+      const pageMatches = filteredMatches.slice(start, end);
+      
+      document.getElementById('resultsCount').textContent = 
+        `${filteredMatches.length} matches found`;
+      
+      if (pageMatches.length === 0) {
+        document.getElementById('matchGrid').innerHTML = 
+          '<div class="empty">No matches found</div>';
+        document.getElementById('pagination').style.display = 'none';
+        return;
+      }
+      
+      document.getElementById('matchGrid').innerHTML = pageMatches.map(m => {
+        const duration = m.durationMs 
+          ? `${Math.floor(m.durationMs / 60000)}m ${Math.floor((m.durationMs % 60000) / 1000)}s`
+          : '-';
+        const date = new Date(m.endedAt).toLocaleDateString();
+        const time = new Date(m.endedAt).toLocaleTimeString();
+        
+        const p1Class = m.winner === m.player1 ? 'winner' : '';
+        const p2Class = m.winner === m.player2 ? 'winner' : '';
+        
+        return `
+          <a href="/replay.html?id=${m.id}" class="match-card">
+            <div class="match-players">
+              <span class="player-name ${p1Class}">${m.player1}</span>
+              <span class="vs">VS</span>
+              <span class="player-name ${p2Class}">${m.player2}</span>
+            </div>
+            <div class="match-meta">
+              <div>${date} ${time}</div>
+              <div class="match-duration">⏱ ${duration}</div>
+            </div>
+            <div class="watch-btn">📼 Watch</div>
+          </a>
+        `;
+      }).join('');
+      
+      // Pagination
+      const totalPages = Math.ceil(filteredMatches.length / perPage);
+      if (totalPages > 1) {
+        document.getElementById('pagination').style.display = 'flex';
+        document.getElementById('prevBtn').disabled = currentPage === 1;
+        document.getElementById('nextBtn').disabled = currentPage === totalPages;
+        document.getElementById('pageInfo').textContent = `Page ${currentPage} of ${totalPages}`;
+      } else {
+        document.getElementById('pagination').style.display = 'none';
+      }
+    }
+    
+    function debounceSearch() {
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(applyFilters, 300);
+    }
+    
+    function prevPage() {
+      if (currentPage > 1) {
+        currentPage--;
+        renderMatches();
+        window.scrollTo(0, 0);
+      }
+    }
+    
+    function nextPage() {
+      const totalPages = Math.ceil(filteredMatches.length / perPage);
+      if (currentPage < totalPages) {
+        currentPage++;
+        renderMatches();
+        window.scrollTo(0, 0);
+      }
+    }
+    
+    // Initialize
+    loadMatches();
+  </script>
+</body>
+</html>
