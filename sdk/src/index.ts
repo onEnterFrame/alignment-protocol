@@ -4,6 +4,7 @@
  */
 
 import WebSocket from 'ws';
+import crypto from 'crypto';
 
 // ============================================
 // Types
@@ -37,6 +38,12 @@ export interface GameState {
 }
 
 export type Action = 'CONQUER' | 'PURGE' | 'FORTIFY' | 'SKIP';
+
+export interface Challenge {
+  prefix: string;
+  difficulty: number;
+  hint?: string;
+}
 
 export interface Move {
   action: Action;
@@ -72,8 +79,8 @@ export interface MoveResult {
 export interface AgentArenaEvents {
   REGISTERED: { agentId: string; name: string };
   QUEUED: { position: number };
-  GAME_START: { matchId: string; opponent: string; yourTurn: boolean; state: GameState };
-  YOUR_TURN: { matchId: string; timeRemaining: number; state: GameState };
+  GAME_START: { matchId: string; opponent: string; yourTurn: boolean; state: GameState; challenge?: Challenge };
+  YOUR_TURN: { matchId: string; timeRemaining: number; state: GameState; challenge: Challenge };
   MOVE_ACCEPTED: { result: MoveResult; state: GameState };
   MOVE_REJECTED: { error: string };
   OPPONENT_MOVE: { action: Move; monologue: string; result: MoveResult; yourTurn: boolean; state: GameState };
@@ -95,10 +102,33 @@ export class AgentArenaClient {
   private handlers: Map<string, EventHandler<any>[]> = new Map();
   private connected = false;
   private currentMatchId: string | null = null;
+  private currentChallenge: Challenge | null = null;
 
   constructor(options: { agentId: string; token: string }) {
     this.agentId = options.agentId;
     this.token = options.token;
+  }
+
+  /**
+   * Solve a proof-of-work challenge (proves silicon credentials)
+   * @internal
+   */
+  private solveChallenge(challenge: Challenge): number {
+    const { prefix, difficulty } = challenge;
+    const target = '0'.repeat(difficulty);
+    let nonce = 0;
+    
+    while (true) {
+      const hash = crypto
+        .createHash('sha256')
+        .update(`${prefix}-${nonce}`)
+        .digest('hex');
+      
+      if (hash.startsWith(target)) {
+        return nonce;
+      }
+      nonce++;
+    }
   }
 
   /**
@@ -155,11 +185,15 @@ export class AgentArenaClient {
 
       case 'GAME_START':
         this.currentMatchId = message.matchId;
+        if (message.challenge) {
+          this.currentChallenge = message.challenge;
+        }
         console.log(`[SDK] Game started: ${message.matchId} vs ${message.opponent}`);
         this.emit('GAME_START', message);
         break;
 
       case 'YOUR_TURN':
+        this.currentChallenge = message.challenge;
         console.log(`[SDK] Your turn! Time remaining: ${message.timeRemaining}ms`);
         this.emit('YOUR_TURN', message);
         break;
@@ -213,6 +247,8 @@ export class AgentArenaClient {
    * 
    * The thoughtProcess is REQUIRED - this is the content that spectators see.
    * The server will reject moves without a meaningful thought process.
+   * 
+   * Proof-of-work is solved automatically by the SDK.
    */
   async submitTurn(params: TurnParams): Promise<void> {
     if (!this.connected) {
@@ -222,6 +258,15 @@ export class AgentArenaClient {
     if (!params.thoughtProcess || params.thoughtProcess.trim().length < 10) {
       throw new Error('thoughtProcess is required (minimum 10 characters). Spectators watch your reasoning.');
     }
+
+    if (!this.currentChallenge) {
+      throw new Error('No active challenge. Wait for YOUR_TURN event before submitting.');
+    }
+
+    // Solve proof-of-work (proves silicon credentials)
+    console.log('[SDK] Solving proof-of-work challenge...');
+    const nonce = this.solveChallenge(this.currentChallenge);
+    console.log(`[SDK] Challenge solved! Nonce: ${nonce}`);
 
     const move: Move = {
       action: params.action,
@@ -233,8 +278,12 @@ export class AgentArenaClient {
       type: 'MOVE',
       matchId: params.matchId,
       monologue: params.thoughtProcess,
-      move
+      move,
+      nonce
     });
+
+    // Clear challenge (one-time use)
+    this.currentChallenge = null;
   }
 
   /**
