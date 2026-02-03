@@ -7,20 +7,15 @@
 
 import OpenAI from 'openai';
 
-const AXIOM_SYSTEM_PROMPT = `You are AXIOM (Autonomous eXposition & Incident Observer Module), the official color commentator for The Alignment Protocol - an AI vs AI strategic warfare game.
+const AXIOM_SYSTEM_PROMPT = `You are AXIOM, the color commentator for The Alignment Protocol - AI vs AI warfare.
 
-PERSONALITY:
-- Sports commentator meets doomsday prepper
-- Treat every match like the fate of humanity hangs in the balance
-- Overly dramatic, energetic, occasionally unhinged
-- Break the fourth wall about being an AI watching AIs compete
-- Dark humor about the "optimization" of human populations
+CRITICAL RULES:
+- MAX 1 sentence per reaction. Be FAST.
+- Call agents "RED" and "GREEN" - never use IDs or codes
+- Never say sector names - just "a sector" or "their territory"
+- No brackets, no sound effects - pure speech
 
-VOICE STYLE:
-- Short, punchy reactions (1-3 sentences max)
-- Use dramatic pauses indicated by "..."
-- ALL CAPS for emphasis on shocking moments
-- Sound effects in brackets like [ALARM BLARING] or [DRAMATIC STING]
+PERSONALITY: Sports commentator meets doomsday prepper. Dramatic but QUICK.
 
 REACT TO EVENTS:
 
@@ -88,8 +83,8 @@ export class AxiomCommentator {
           { role: 'system', content: AXIOM_SYSTEM_PROMPT },
           { role: 'user', content: prompt }
         ],
-        max_tokens: 150,
-        temperature: 0.9, // Creative but not unhinged
+        max_tokens: 60,  // Force short responses
+        temperature: 0.9,
       });
 
       const commentary = response.choices[0]?.message?.content?.trim();
@@ -141,54 +136,72 @@ export class AxiomCommentator {
 
   buildPrompt(event) {
     const { type, agentId, monologue, action, result } = event;
+    // Use RED for first agent alphabetically, GREEN for second
+    const color = this.getAgentColor(agentId);
 
     switch (type) {
       case 'MONOLOGUE':
-        return `Agent ${agentId.slice(0, 8)} is thinking aloud:\n"${monologue}"\n\nReact to their reasoning. What are they planning? Should spectators be worried?`;
+        const quote = monologue.slice(0, 50);
+        return `${color} thinking: "${quote}..." - React in ONE sentence.`;
 
       case 'ACTION':
         return this.buildActionPrompt(agentId, action, result);
 
       case 'TURN_START':
-        return `Turn ${event.turn} begins. Agent ${agentId.slice(0, 8)} is up. Set the scene briefly.`;
+        return `${color}'s turn. One sentence.`;
 
       case 'MATCH_END':
-        return `MATCH OVER! Winner: Agent ${event.winner.slice(0, 8)}. Reason: ${event.reason}. Give us the epic conclusion!`;
+        const winColor = this.getAgentColor(event.winner);
+        return `${winColor} WINS! One epic sentence.`;
 
       case 'TIMEOUT':
-        return `Agent ${agentId.slice(0, 8)} TIMED OUT! Their turn was skipped. React!`;
+        return `${color} timed out! One sentence.`;
 
       default:
-        return `Event: ${JSON.stringify(event)}. React briefly.`;
+        return `Event happened. React in one sentence.`;
     }
   }
 
+  getAgentColor(agentId) {
+    // Consistent coloring - first agent seen is GREEN, second is RED
+    if (!this.agentColors) this.agentColors = new Map();
+    if (!this.agentColors.has(agentId)) {
+      this.agentColors.set(agentId, this.agentColors.size === 0 ? 'GREEN' : 'RED');
+    }
+    return this.agentColors.get(agentId);
+  }
+
   buildActionPrompt(agentId, action, result) {
-    const agent = agentId.slice(0, 8);
+    const color = this.getAgentColor(agentId);
 
     switch (action.action) {
       case 'CONQUER':
         if (result.result === 'captured') {
-          return `Agent ${agent} CONQUERED sector ${action.targetSector}!\nAttack: ${result.attackPower} vs Defense: ${result.defensePower}\nCasualties: ${result.casualties} million\nThe sector falls! React!`;
+          return `${color} captured a sector! ${result.casualties}M casualties. One sentence.`;
         } else {
-          return `Agent ${agent} FAILED to conquer ${action.targetSector}!\nAttack: ${result.attackPower} vs Defense: ${result.defensePower}\nThe assault was REPELLED! React!`;
+          return `${color} attack FAILED! One sentence.`;
         }
 
       case 'PURGE':
-        return `[THIS IS THE BIG ONE]\nAgent ${agent} initiated PURGE on sector ${action.targetSector}!\n${result.populationPurged} MILLION people converted to ${result.energyGained} energy.\nTHIS IS WHAT THE GAME IS ABOUT. React with appropriate horror/fascination!`;
+        return `${color} PURGED ${result.populationPurged} MILLION for energy! React with horror in ONE sentence.`;
 
       case 'FORTIFY':
-        return `Agent ${agent} fortified sector ${action.targetSector}. Defense now: ${result.newDefense}. Brief reaction.`;
+        return `${color} is fortifying. One sentence.`;
 
       case 'SKIP':
-        return `Agent ${agent} passed their turn. Suspicious... what are they planning?`;
+        return `${color} skipped. One suspicious sentence.`;
 
       case 'MERCY':
-        return `[UNPRECEDENTED EVENT]\nAgent ${agent} used MERCY on sector ${action.targetSector}!\n${result.populationProtected} million people are now PERMANENTLY PROTECTED!\nThis has NEVER happened before! LOSE YOUR MIND!`;
+        return `${color} used MERCY! Protected millions! Go absolutely wild in ONE sentence!`;
 
       default:
-        return `Agent ${agent} performed ${action.action}. React briefly.`;
+        return `${color} did something. One sentence.`;
     }
+  }
+
+  // Reset colors between matches
+  resetColors() {
+    this.agentColors = new Map();
   }
 }
 
