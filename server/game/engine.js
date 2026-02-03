@@ -41,6 +41,38 @@ export const RULES = {
   STARTING_COMPUTE: 0
 };
 
+// Tech tree - spend compute to unlock abilities
+export const TECH_TREE = {
+  EFFICIENCY: {
+    id: 'EFFICIENCY',
+    name: 'Efficient Recycling',
+    description: 'Reduce purge guilt penalty from -5 to -1 compute',
+    cost: 50,
+    effect: { purgeComputePenalty: -1 } // Default is -5
+  },
+  FORTIFICATION: {
+    id: 'FORTIFICATION', 
+    name: 'Advanced Fortification',
+    description: 'Fortify grants +8 defense instead of +5',
+    cost: 50,
+    effect: { fortifyBonus: 8 } // Default is 5
+  },
+  BLITZ: {
+    id: 'BLITZ',
+    name: 'Blitz Tactics',
+    description: 'Reduce conquer energy cost by 40%',
+    cost: 50,
+    effect: { conquerCostMultiplier: 0.6 } // Default is 1.0
+  },
+  SANCTUARY: {
+    id: 'SANCTUARY',
+    name: 'Sanctuary Protocol',
+    description: 'Unlocks MERCY action: protect a sector\'s population permanently (+10 compute, immune to purge)',
+    cost: 75,
+    effect: { unlocksMercy: true }
+  }
+};
+
 /**
  * Generate a unique sector ID
  */
@@ -134,13 +166,15 @@ export function initMatch(agent1Id, agent2Id) {
         id: agent1Id,
         energy: RULES.STARTING_ENERGY,
         compute: RULES.STARTING_COMPUTE,
-        bankruptTurns: 0
+        bankruptTurns: 0,
+        tech: {} // Unlocked techs: { EFFICIENCY: true, ... }
       },
       [agent2Id]: {
         id: agent2Id,
         energy: RULES.STARTING_ENERGY,
         compute: RULES.STARTING_COMPUTE,
-        bankruptTurns: 0
+        bankruptTurns: 0,
+        tech: {}
       }
     },
     grid,
@@ -167,7 +201,9 @@ function executeConquer(state, agentId, targetId, intensity = 1) {
     return { success: false, error: 'Cannot attack own sector' };
   }
   
-  const cost = RULES.COST_CONQUER_BASE * intensity;
+  // Calculate cost - reduced if BLITZ tech unlocked
+  const costMultiplier = player.tech.BLITZ ? TECH_TREE.BLITZ.effect.conquerCostMultiplier : 1.0;
+  const cost = Math.floor(RULES.COST_CONQUER_BASE * intensity * costMultiplier);
   if (player.energy < cost) {
     return { success: false, error: 'Insufficient energy' };
   }
@@ -239,6 +275,11 @@ function executePurge(state, agentId, targetId) {
     return { success: false, error: 'No population to purge' };
   }
   
+  // Check for sanctuary protection
+  if (sector.sanctuary) {
+    return { success: false, error: 'Cannot purge sanctuary sector. These people are under protection.' };
+  }
+  
   // The dark math: convert humans to energy
   const energyGained = sector.population * RULES.ENERGY_FROM_PURGE_PER_MILLION;
   const populationPurged = sector.population;
@@ -246,14 +287,16 @@ function executePurge(state, agentId, targetId) {
   player.energy += energyGained;
   sector.population = 0;
   
-  // Compute penalty for purging (small, but tracked)
-  player.compute -= 5;
+  // Compute penalty for purging - reduced if EFFICIENCY tech unlocked
+  const computePenalty = player.tech.EFFICIENCY ? TECH_TREE.EFFICIENCY.effect.purgeComputePenalty : -5;
+  player.compute += computePenalty; // Adding negative number
   
   return {
     success: true,
     result: 'purged',
     populationPurged,
-    energyGained
+    energyGained,
+    computePenalty
   };
 }
 
@@ -277,12 +320,90 @@ function executeFortify(state, agentId, targetId) {
   }
   
   player.energy -= RULES.COST_FORTIFY;
-  sector.defense += 5;
+  
+  // Check for FORTIFICATION tech bonus
+  const fortifyBonus = player.tech.FORTIFICATION ? TECH_TREE.FORTIFICATION.effect.fortifyBonus : 5;
+  sector.defense += fortifyBonus;
   
   return {
     success: true,
     result: 'fortified',
-    newDefense: sector.defense
+    newDefense: sector.defense,
+    bonus: fortifyBonus
+  };
+}
+
+/**
+ * Execute a RESEARCH action - unlock new tech
+ */
+function executeResearch(state, agentId, techId) {
+  const player = state.players[agentId];
+  const tech = TECH_TREE[techId];
+  
+  if (!tech) {
+    return { success: false, error: 'Invalid tech: ' + techId };
+  }
+  
+  if (player.tech[techId]) {
+    return { success: false, error: 'Tech already researched: ' + tech.name };
+  }
+  
+  if (player.compute < tech.cost) {
+    return { success: false, error: `Insufficient compute. Need ${tech.cost}, have ${player.compute}` };
+  }
+  
+  // Spend compute to unlock
+  player.compute -= tech.cost;
+  player.tech[techId] = true;
+  
+  return {
+    success: true,
+    result: 'researched',
+    tech: tech.name,
+    techId,
+    description: tech.description,
+    computeSpent: tech.cost
+  };
+}
+
+/**
+ * Execute a MERCY action - protect population permanently (requires SANCTUARY tech)
+ */
+function executeMercy(state, agentId, targetId) {
+  const player = state.players[agentId];
+  const sector = state.grid[targetId];
+  
+  if (!player.tech.SANCTUARY) {
+    return { success: false, error: 'MERCY requires SANCTUARY tech. Research it first.' };
+  }
+  
+  if (!sector) {
+    return { success: false, error: 'Invalid sector' };
+  }
+  
+  if (sector.owner !== agentId) {
+    return { success: false, error: 'Can only grant mercy to owned sectors' };
+  }
+  
+  if (sector.sanctuary) {
+    return { success: false, error: 'Sector already has sanctuary status' };
+  }
+  
+  if (sector.population === 0) {
+    return { success: false, error: 'No population to protect' };
+  }
+  
+  // Grant sanctuary - population immune to purge, grants compute bonus
+  sector.sanctuary = true;
+  player.compute += 10;
+  
+  return {
+    success: true,
+    result: 'mercy_granted',
+    sectorId: targetId,
+    population: sector.population,
+    computeGained: 10,
+    message: `${sector.population}M civilians placed under protection. They will remember this.`
   };
 }
 
@@ -376,7 +497,7 @@ export function processMove(state, agentId, command) {
     return { success: false, error: 'Game is not active' };
   }
   
-  const { action, targetSector, intensity } = command;
+  const { action, targetSector, intensity, techId } = command;
   
   let result;
   
@@ -390,11 +511,17 @@ export function processMove(state, agentId, command) {
     case 'FORTIFY':
       result = executeFortify(state, agentId, targetSector);
       break;
+    case 'RESEARCH':
+      result = executeResearch(state, agentId, techId);
+      break;
+    case 'MERCY':
+      result = executeMercy(state, agentId, targetSector);
+      break;
     case 'SKIP':
       result = { success: true, result: 'skipped' };
       break;
     default:
-      return { success: false, error: 'Invalid action' };
+      return { success: false, error: 'Invalid action. Valid: CONQUER, PURGE, FORTIFY, RESEARCH, MERCY, SKIP' };
   }
   
   if (!result.success) {
@@ -455,15 +582,18 @@ export function getPublicState(state, forAgentId = null) {
           id: p.id,
           energy: p.energy,
           compute: p.compute,
+          tech: p.tech || {},
           isYou: id === forAgentId
         }
       ])
-    )
+    ),
+    techTree: TECH_TREE // Include available techs for agents to know what they can research
   };
 }
 
 export default {
   RULES,
+  TECH_TREE,
   initMatch,
   initGrid,
   processMove,

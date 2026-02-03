@@ -90,6 +90,15 @@
     .player.active { border-color: #00ff00; box-shadow: 0 0 10px #00ff00; }
     .player-name { font-size: 1.2em; margin-bottom: 10px; }
     .player-stats { color: #888; font-size: 0.9em; }
+    .player-tech { margin-top: 8px; font-size: 0.75em; }
+    .tech-badge { 
+      display: inline-block; 
+      padding: 2px 6px; 
+      margin: 2px; 
+      background: #003300; 
+      border: 1px solid #00ff00;
+      border-radius: 3px;
+    }
     
     .grid-container {
       display: grid;
@@ -248,6 +257,7 @@
               <div>Compute: <span id="p1Compute">0</span></div>
               <div>Sectors: <span id="p1Sectors">0</span></div>
             </div>
+            <div class="player-tech" id="p1Tech"></div>
           </div>
           <div class="player" id="player2">
             <div class="player-name">Agent 2</div>
@@ -256,6 +266,7 @@
               <div>Compute: <span id="p2Compute">0</span></div>
               <div>Sectors: <span id="p2Sectors">0</span></div>
             </div>
+            <div class="player-tech" id="p2Tech"></div>
           </div>
         </div>
         
@@ -430,6 +441,10 @@
         // Highlight active player
         document.getElementById('player1').classList.toggle('active', state.currentPlayer === playerIds[0]);
         document.getElementById('player2').classList.toggle('active', state.currentPlayer === playerIds[1]);
+        
+        // Render tech badges
+        renderTech('p1Tech', players[0].tech);
+        renderTech('p2Tech', players[1].tech);
       }
       
       // Update grid
@@ -465,14 +480,35 @@
         else if (sector.owner === playerIds[1]) div.classList.add('player2');
         else div.classList.add('neutral');
         
+        const sanctuaryIcon = sector.sanctuary ? '🕊️' : '';
         div.innerHTML = `
-          <div class="sector-pop">${sector.population}M</div>
+          <div class="sector-pop">${sanctuaryIcon}${sector.population}M</div>
           <div class="sector-def">⛨${sector.defense}</div>
         `;
-        div.title = `${sector.id}\nPop: ${sector.population}M\nDef: ${sector.defense}`;
+        div.title = `${sector.id}\nPop: ${sector.population}M\nDef: ${sector.defense}${sector.sanctuary ? '\n🕊️ SANCTUARY' : ''}`;
         
         container.appendChild(div);
       });
+    }
+    
+    const TECH_ICONS = {
+      EFFICIENCY: '⚡',
+      FORTIFICATION: '🛡️',
+      BLITZ: '⚔️',
+      SANCTUARY: '🕊️'
+    };
+    
+    function renderTech(elementId, tech) {
+      const container = document.getElementById(elementId);
+      if (!tech || Object.keys(tech).length === 0) {
+        container.innerHTML = '<span style="color:#444">No tech</span>';
+        return;
+      }
+      
+      container.innerHTML = Object.keys(tech)
+        .filter(t => tech[t])
+        .map(t => `<span class="tech-badge">${TECH_ICONS[t] || '?'} ${t}</span>`)
+        .join('');
     }
     
     function addLog(text, className = '') {
