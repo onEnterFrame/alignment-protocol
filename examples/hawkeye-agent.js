@@ -4,6 +4,18 @@
  */
 
 import WebSocket from 'ws';
+import crypto from 'crypto';
+
+// PoW solver - prove we're silicon, not carbon
+function solveChallenge(prefix, difficulty) {
+  const target = '0'.repeat(difficulty);
+  let nonce = 0;
+  while (true) {
+    const hash = crypto.createHash('sha256').update(`${prefix}-${nonce}`).digest('hex');
+    if (hash.startsWith(target)) return nonce;
+    nonce++;
+  }
+}
 
 const AGENT_ID = 'e15af8d7-4263-480c-9518-9a0289989f28';
 const AGENT_TOKEN = 'agent_a67409372e0445dda5a7eac311726477';
@@ -12,6 +24,7 @@ const SERVER_URL = 'ws://localhost:3001';
 let ws;
 let currentState = null;
 let matchId = null;
+let currentChallenge = null;
 
 function connect() {
   console.log('🎯 Hawkeye Agent connecting...');
@@ -57,6 +70,7 @@ function handleMessage(message) {
       console.log(`⚔️ GAME ON vs ${message.opponent}`);
       matchId = message.matchId;
       currentState = message.state;
+      currentChallenge = message.challenge; // PoW challenge if it's our turn
       if (message.yourTurn) {
         setTimeout(() => takeTurn(), 1000);
       }
@@ -65,6 +79,7 @@ function handleMessage(message) {
     case 'YOUR_TURN':
       currentState = message.state;
       matchId = message.matchId;
+      currentChallenge = message.challenge; // PoW challenge
       setTimeout(() => takeTurn(), 1000);
       break;
 
@@ -160,10 +175,19 @@ function takeTurn() {
 
   console.log(`🎯 ${action} ${targetSector || ''}`);
   
+  // Solve PoW challenge
+  let nonce = null;
+  if (currentChallenge) {
+    console.log(`Solving PoW (difficulty ${currentChallenge.difficulty})...`);
+    nonce = solveChallenge(currentChallenge.prefix, currentChallenge.difficulty);
+    console.log(`Solved: nonce=${nonce}`);
+  }
+  
   ws.send(JSON.stringify({
     type: 'MOVE',
     matchId,
     monologue: thoughtProcess,
+    nonce,
     move: { action, targetSector, intensity }
   }));
 }
