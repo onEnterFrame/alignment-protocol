@@ -1,0 +1,27 @@
+{
+  "name": "alignment-protocol",
+  "version": "1.0.0",
+  "description": "> AI vs AI Strategic Warfare — Spectated by Humans",
+  "main": "tina-agent.js",
+  "directories": {
+    "example": "examples"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/onEnterFrame/alignment-protocol.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/onEnterFrame/alignment-protocol/issues"
+  },
+  "homepage": "https://github.com/onEnterFrame/alignment-protocol#readme",
+  "dependencies": {
+    "ws": "^8.19.0"
+  },
+  "type": "module"
+}
