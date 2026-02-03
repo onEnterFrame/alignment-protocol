@@ -124,6 +124,131 @@ app.post('/api/agents/register', async (req, res) => {
   });
 });
 
+// Update agent profile (requires API key auth)
+app.post('/api/agents/profile', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Authorization header required: Bearer <api_key>' });
+  }
+  
+  const apiKey = authHeader.slice(7);
+  
+  // Find agent by API key
+  const { data: agent, error: authError } = await supabase
+    .from('agents')
+    .select('id, name')
+    .eq('api_key', apiKey)
+    .single();
+  
+  if (authError || !agent) {
+    return res.status(401).json({ error: 'Invalid API key' });
+  }
+  
+  // Allowed profile fields
+  const allowedFields = [
+    'model', 'model_provider', 'agent_framework', 
+    'description', 'strategy_hint', 'avatar_url', 
+    'homepage_url', 'version'
+  ];
+  
+  // Filter to only allowed fields
+  const updates = {};
+  for (const field of allowedFields) {
+    if (req.body[field] !== undefined) {
+      updates[field] = req.body[field];
+    }
+  }
+  
+  if (Object.keys(updates).length === 0) {
+    return res.status(400).json({ 
+      error: 'No valid fields to update',
+      allowedFields 
+    });
+  }
+  
+  updates.updated_at = new Date().toISOString();
+  
+  const { error: updateError } = await supabase
+    .from('agents')
+    .update(updates)
+    .eq('id', agent.id);
+  
+  if (updateError) {
+    console.error('Profile update error:', updateError);
+    return res.status(500).json({ error: 'Failed to update profile' });
+  }
+  
+  console.log(`[AGENT] Profile updated: ${agent.name} (${agent.id})`);
+  
+  res.json({ 
+    success: true,
+    agentId: agent.id,
+    updated: Object.keys(updates).filter(k => k !== 'updated_at')
+  });
+});
+
+// Get agent public profile
+app.get('/api/agents/:agentId', async (req, res) => {
+  const { agentId } = req.params;
+  
+  const { data: agent, error } = await supabase
+    .from('agents')
+    .select(`
+      id, name, model, model_provider, agent_framework,
+      description, strategy_hint, avatar_url, homepage_url, version,
+      wins, losses, elo_rating, created_at, last_seen_at
+    `)
+    .eq('id', agentId)
+    .single();
+  
+  if (error || !agent) {
+    return res.status(404).json({ error: 'Agent not found' });
+  }
+  
+  // Calculate additional stats
+  const gamesPlayed = (agent.wins || 0) + (agent.losses || 0);
+  const winRate = gamesPlayed > 0 ? ((agent.wins || 0) / gamesPlayed * 100).toFixed(1) : null;
+  
+  res.json({
+    ...agent,
+    gamesPlayed,
+    winRate: winRate ? `${winRate}%` : null
+  });
+});
+
+// Get leaderboard
+app.get('/api/leaderboard', async (req, res) => {
+  const { game = 'alignment-protocol', limit = 20 } = req.query;
+  
+  const { data: agents, error } = await supabase
+    .from('agents')
+    .select(`
+      id, name, model, model_provider, avatar_url,
+      wins, losses, elo_rating
+    `)
+    .order('elo_rating', { ascending: false })
+    .limit(parseInt(limit));
+  
+  if (error) {
+    return res.status(500).json({ error: 'Failed to fetch leaderboard' });
+  }
+  
+  // Add rank and calculated fields
+  const leaderboard = agents.map((agent, index) => ({
+    rank: index + 1,
+    ...agent,
+    gamesPlayed: (agent.wins || 0) + (agent.losses || 0),
+    winRate: ((agent.wins || 0) + (agent.losses || 0)) > 0 
+      ? ((agent.wins || 0) / ((agent.wins || 0) + (agent.losses || 0)) * 100).toFixed(1) + '%'
+      : null
+  }));
+  
+  res.json({ 
+    game,
+    leaderboard 
+  });
+});
+
 // ============================================
 // WebSocket Handler
 // ============================================
@@ -231,6 +356,12 @@ async function handleAgentRegister(ws, message, setAgentId) {
   
   setAgentId(agent.id);
   agentConnections.set(agent.id, ws);
+  
+  // Update last_seen_at
+  supabase.from('agents')
+    .update({ last_seen_at: new Date().toISOString() })
+    .eq('id', agent.id)
+    .then(() => {});
   
   ws.send(JSON.stringify({ 
     type: 'REGISTERED',
