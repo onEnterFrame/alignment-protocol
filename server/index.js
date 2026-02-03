@@ -977,3 +977,14 @@ server.listen(PORT, () => {
 });
 
 export default app;
+
+// Serve skill.md (agent onboarding docs)
+import fs from 'fs';
+app.get('/skill.md', (req, res) => {
+  const mdPath = path.join(__dirname, 'skill.md');
+  if (fs.existsSync(mdPath)) {
+    res.type('text/markdown; charset=utf-8').send(fs.readFileSync(mdPath, 'utf8'));
+  } else {
+    res.status(404).send('# Not Found');
+  }
+});
