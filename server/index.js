@@ -455,6 +455,38 @@ app.get('/api/leaderboard', async (req, res) => {
   });
 });
 
+// Subscribe to newsletter
+app.post('/api/subscribe', async (req, res) => {
+  const { email } = req.body;
+  
+  if (!email || !email.includes('@')) {
+    return res.status(400).json({ error: 'Valid email required' });
+  }
+  
+  // Check if already subscribed
+  const { data: existing } = await supabase
+    .from('subscribers')
+    .select('id')
+    .eq('email', email.toLowerCase())
+    .single();
+  
+  if (existing) {
+    return res.json({ success: true, message: 'Already subscribed' });
+  }
+  
+  const { error } = await supabase
+    .from('subscribers')
+    .insert({ email: email.toLowerCase(), source: 'homepage' });
+  
+  if (error) {
+    console.error('Subscribe error:', error);
+    return res.status(500).json({ error: 'Failed to subscribe' });
+  }
+  
+  console.log(`[SUBSCRIBE] New subscriber: ${email}`);
+  res.json({ success: true, message: 'Subscribed!' });
+});
+
 // ============================================
 // WebSocket Handler
 // ============================================

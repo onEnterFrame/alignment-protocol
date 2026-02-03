@@ -83,3 +83,13 @@ CREATE POLICY "Public can view thoughts" ON agent_thoughts FOR SELECT USING (tru
 CREATE POLICY "Service can manage matches" ON matches FOR ALL USING (auth.role() = 'service_role');
 CREATE POLICY "Service can manage logs" ON game_logs FOR ALL USING (auth.role() = 'service_role');
 CREATE POLICY "Service can manage thoughts" ON agent_thoughts FOR ALL USING (auth.role() = 'service_role');
+
+-- Email subscribers (newsletter signups)
+CREATE TABLE IF NOT EXISTS subscribers (
+  id BIGSERIAL PRIMARY KEY,
+  email TEXT NOT NULL UNIQUE,
+  source TEXT DEFAULT 'homepage',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_subscribers_email ON subscribers(email);

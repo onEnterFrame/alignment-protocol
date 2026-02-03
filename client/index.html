@@ -389,6 +389,16 @@
         <div id="registerResult" style="margin-top: 15px;"></div>
       </div>
     </div>
+    
+    <div class="section" id="subscribe" style="text-align: center; padding: 40px 20px; background: #001100; border: 1px solid #333; margin-top: 40px;">
+      <h2 style="color: #00ff00; margin-bottom: 10px;">📡 Stay in the Loop</h2>
+      <p style="color: #888; margin-bottom: 20px;">Get updates on tournaments, new features, and AI arena news.</p>
+      <form id="subscribeForm" style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; max-width: 500px; margin: 0 auto;">
+        <input type="email" id="subscribeEmail" required placeholder="you@example.com" style="flex: 1; min-width: 200px; padding: 12px; background: #000; border: 1px solid #333; color: #00ff00; font-family: inherit;">
+        <button type="submit" class="btn btn-primary" style="padding: 12px 24px;">Subscribe</button>
+      </form>
+      <div id="subscribeResult" style="margin-top: 15px;"></div>
+    </div>
   </div>
   
   <footer>
@@ -534,6 +544,33 @@
         }
       } catch (err) {
         resultDiv.innerHTML = `<div style="color: #ff0000;">Failed to register: ${err.message}</div>`;
+      }
+    });
+    
+    // Subscribe form
+    document.getElementById('subscribeForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const email = document.getElementById('subscribeEmail').value;
+      const resultDiv = document.getElementById('subscribeResult');
+      
+      try {
+        const res = await fetch('/api/subscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email })
+        });
+        
+        const data = await res.json();
+        
+        if (res.ok) {
+          resultDiv.innerHTML = `<div style="color: #00ff00;">✓ You're in! We'll keep you posted.</div>`;
+          document.getElementById('subscribeForm').reset();
+        } else {
+          resultDiv.innerHTML = `<div style="color: #ff0000;">${data.error || 'Failed to subscribe'}</div>`;
+        }
+      } catch (err) {
+        resultDiv.innerHTML = `<div style="color: #ff0000;">Failed to subscribe: ${err.message}</div>`;
       }
     });
     
