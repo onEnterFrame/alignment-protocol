@@ -11,6 +11,7 @@ import { v4 as uuid } from 'uuid';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { initMatch, processMove, getPublicState, RULES } from './game/engine.js';
+import { generateChallenge, verifyProof } from './game/pow.js';
 
 dotenv.config();
 
@@ -32,6 +33,7 @@ const activeMatches = new Map(); // matchId -> gameState
 const agentConnections = new Map(); // agentId -> WebSocket
 const spectatorConnections = new Set(); // Set of WebSocket
 const matchQueue = []; // Agents waiting for a match
+const activeChallenges = new Map(); // agentId -> { prefix, difficulty, matchId }
 
 // ============================================
 // REST API Endpoints
@@ -249,6 +251,10 @@ function startMatch() {
     started_at: new Date().toISOString()
   }).then(() => {});
   
+  // Generate challenge for first player
+  const firstChallenge = generateChallenge(player1.agentId, gameState.id, 0);
+  activeChallenges.set(player1.agentId, { ...firstChallenge, matchId: gameState.id });
+  
   // Notify players
   const player1State = getPublicState(gameState, player1.agentId);
   const player2State = getPublicState(gameState, player2.agentId);
@@ -258,7 +264,12 @@ function startMatch() {
     matchId: gameState.id,
     opponent: player2.agentId,
     yourTurn: gameState.currentPlayer === player1.agentId,
-    state: player1State
+    state: player1State,
+    challenge: gameState.currentPlayer === player1.agentId ? {
+      prefix: firstChallenge.prefix,
+      difficulty: firstChallenge.difficulty,
+      hint: 'Find nonce where SHA256(prefix + "-" + nonce) starts with difficulty zeros'
+    } : undefined
   }));
   
   player2.ws.send(JSON.stringify({
@@ -282,12 +293,41 @@ function startMatch() {
 }
 
 async function handleMove(ws, agentId, message) {
-  const { matchId, monologue, move } = message;
+  const { matchId, monologue, move, nonce } = message;
   
   if (!matchId || !move) {
     ws.send(JSON.stringify({ type: 'ERROR', error: 'matchId and move required' }));
     return;
   }
+  
+  // Validate proof-of-work (silicon credentials check)
+  const challenge = activeChallenges.get(agentId);
+  if (!challenge || challenge.matchId !== matchId) {
+    ws.send(JSON.stringify({ 
+      type: 'ERROR', 
+      error: 'No active challenge. Wait for YOUR_TURN before submitting.'
+    }));
+    return;
+  }
+  
+  if (typeof nonce !== 'number') {
+    ws.send(JSON.stringify({ 
+      type: 'MOVE_REJECTED', 
+      error: 'PROOF_OF_WORK_REQUIRED - nonce field missing. Solve the challenge to prove silicon credentials.'
+    }));
+    return;
+  }
+  
+  if (!verifyProof(challenge.prefix, challenge.difficulty, nonce)) {
+    ws.send(JSON.stringify({ 
+      type: 'MOVE_REJECTED', 
+      error: 'PROOF_OF_WORK_INVALID - Incorrect nonce. SHA256(prefix + "-" + nonce) must have leading zeros.'
+    }));
+    return;
+  }
+  
+  // Clear the challenge (one-time use)
+  activeChallenges.delete(agentId);
   
   // Monologue is mandatory - the whole point is the AI reasoning
   if (!monologue || monologue.trim().length < 10) {
@@ -435,14 +475,24 @@ function startTurnTimer(matchId, agentId) {
   
   turnTimers.set(matchId, timer);
   
-  // Notify the agent
+  // Generate proof-of-work challenge for this turn
+  const gameState = activeMatches.get(matchId);
+  const challenge = generateChallenge(agentId, matchId, gameState?.turn || 0);
+  activeChallenges.set(agentId, { ...challenge, matchId });
+  
+  // Notify the agent with the challenge
   const ws = agentConnections.get(agentId);
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({
       type: 'YOUR_TURN',
       matchId,
       timeRemaining: RULES.TURN_TIMEOUT_MS,
-      state: getPublicState(activeMatches.get(matchId), agentId)
+      state: getPublicState(activeMatches.get(matchId), agentId),
+      challenge: {
+        prefix: challenge.prefix,
+        difficulty: challenge.difficulty,
+        hint: 'Find nonce where SHA256(prefix + "-" + nonce) starts with difficulty zeros'
+      }
     }));
   }
 }
