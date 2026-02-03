@@ -35,11 +35,11 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Serve static files from client folder
+// Serve static files from client build
 import path from 'path';
 import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-app.use(express.static(path.join(__dirname, '../client')));
+app.use(express.static(path.join(__dirname, '../client/dist')));
 
 // Root serves the landing page (index.html via static)
 

@@ -95,7 +95,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick, watch } from 'vue';
+import { ref, onMounted, nextTick } from 'vue';
 import { createClient } from '@supabase/supabase-js';
 import HexGrid from './components/HexGrid.vue';
 import PlayerStats from './components/PlayerStats.vue';

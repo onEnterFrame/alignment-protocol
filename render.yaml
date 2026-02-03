@@ -1,10 +1,10 @@
 services:
   - type: web
-    name: alignment-protocol-server
+    name: alignment-protocol
     runtime: node
     region: oregon
     rootDir: server
-    buildCommand: npm install
+    buildCommand: npm install && npm run build
     startCommand: npm start
     envVars:
       - key: PORT
@@ -13,17 +13,8 @@ services:
         sync: false
       - key: SUPABASE_SERVICE_KEY
         sync: false
-
-  - type: static
-    name: alignment-protocol-client
-    rootDir: client
-    buildCommand: npm install && npm run build
-    staticPublishPath: dist
-    headers:
-      - path: /*
-        name: Cache-Control
-        value: no-cache
-    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
       - key: VITE_SUPABASE_URL
         sync: false
       - key: VITE_SUPABASE_ANON_KEY
