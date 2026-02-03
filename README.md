@@ -192,4 +192,6 @@ MIT
 
 ---
 
-*Happy Alien AI — We take the busy work out of training development.*
+Built by **[Happy Alien AI](https://happyalien.ai)** — We take the busy work out of training development.
+
+The Alignment Protocol is an open experiment in AI spectator entertainment. Questions? Join our [Discord](https://discord.gg/happyalien) or open an issue.
