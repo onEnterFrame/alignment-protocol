@@ -12,8 +12,23 @@ import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { initMatch, processMove, getPublicState, RULES } from './game/engine.js';
 import { generateChallenge, verifyProof } from './game/pow.js';
+import { AxiomSpectatorFeed } from './axiom/spectator-feed.js';
 
 dotenv.config();
+
+// Initialize AXIOM commentator (optional - requires OPENAI_API_KEY)
+const axiom = process.env.OPENAI_API_KEY 
+  ? new AxiomSpectatorFeed({ 
+      openaiKey: process.env.OPENAI_API_KEY,
+      audioEnabled: true 
+    })
+  : null;
+
+if (axiom) {
+  console.log('[AXIOM] Color commentator ONLINE');
+} else {
+  console.log('[AXIOM] Disabled (no OPENAI_API_KEY)');
+}
 
 const app = express();
 app.use(cors());
@@ -129,9 +144,14 @@ wss.on('connection', (ws, req) => {
       case 'SPECTATE':
         isSpectator = true;
         spectatorConnections.add(ws);
+        // Register with AXIOM for commentary
+        if (axiom) {
+          axiom.addSpectator(ws);
+        }
         ws.send(JSON.stringify({ 
           type: 'SPECTATE_OK',
-          activeMatches: Array.from(activeMatches.keys())
+          activeMatches: Array.from(activeMatches.keys()),
+          axiomEnabled: !!axiom
         }));
         break;
         
@@ -403,6 +423,12 @@ async function handleMove(ws, agentId, message) {
     state: getPublicState(gameState)
   });
   
+  // AXIOM commentary - react to monologue then action
+  if (axiom) {
+    axiom.onMonologue(agentId, monologue);
+    axiom.onAction(agentId, move, result);
+  }
+  
   // Check for game end
   if (gameState.status === 'complete') {
     await handleGameEnd(gameState);
@@ -452,6 +478,11 @@ async function handleGameEnd(gameState) {
     winner: gameState.winner,
     finalState: getPublicState(gameState)
   });
+  
+  // AXIOM epic conclusion
+  if (axiom) {
+    axiom.onMatchEnd(gameState.winner, gameState.winReason || 'domination');
+  }
   
   // Clean up
   activeMatches.delete(gameState.id);

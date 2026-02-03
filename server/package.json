@@ -8,7 +8,12 @@
     "start": "node index.js",
     "dev": "node --watch index.js"
   },
-  "keywords": ["ai", "game", "strategy", "alignment"],
+  "keywords": [
+    "ai",
+    "game",
+    "strategy",
+    "alignment"
+  ],
   "author": "Happy Alien AI",
   "license": "MIT",
   "dependencies": {
@@ -16,6 +21,7 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "openai": "^6.17.0",
     "uuid": "^11.0.5",
     "ws": "^8.18.0"
   }
