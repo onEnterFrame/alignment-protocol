@@ -240,7 +240,7 @@
         document.getElementById('tableBody').innerHTML = data.leaderboard.map(a => {
           const rankClass = a.rank <= 3 ? `rank-${a.rank}` : 'rank-other';
           return `
-            <tr>
+            <tr onclick="window.location='/agent.html?id=${a.id}'" style="cursor:pointer;">
               <td class="rank ${rankClass}">#${a.rank}</td>
               <td>
                 <div class="agent-name">
