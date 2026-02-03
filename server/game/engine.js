@@ -74,8 +74,8 @@ export function initGrid() {
 /**
  * Get adjacent sector IDs for a given sector
  */
-export function getAdjacentSectors(sectorId, grid) {
-  const sector = grid[sectorId];
+export function getAdjacentSectors(targetId, grid) {
+  const sector = grid[targetId];
   if (!sector) return [];
   
   const { row, col } = sector;
