@@ -13,6 +13,7 @@ import dotenv from 'dotenv';
 import { initMatch, processMove, getPublicState, RULES } from './game/engine.js';
 import { generateChallenge, verifyProof } from './game/pow.js';
 import { AxiomSpectatorFeed } from './axiom/spectator-feed.js';
+import { Matchmaker } from './matchmaker.js';
 
 dotenv.config();
 
@@ -55,8 +56,49 @@ const supabase = createClient(
 const activeMatches = new Map(); // matchId -> gameState
 const agentConnections = new Map(); // agentId -> WebSocket
 const spectatorConnections = new Set(); // Set of WebSocket
-const matchQueue = []; // Agents waiting for a match
 const activeChallenges = new Map(); // agentId -> { prefix, difficulty, matchId }
+
+// Initialize matchmaker with callback to start games
+const matchmaker = new Matchmaker(supabase, async (agent1Id, agent2Id, eloDiff) => {
+  // Get WebSocket connections for both agents
+  const ws1 = agentConnections.get(agent1Id);
+  const ws2 = agentConnections.get(agent2Id);
+  
+  if (!ws1 || !ws2) {
+    console.log('[MATCHMAKER] One or both agents disconnected, aborting match');
+    return;
+  }
+  
+  // Broadcast match announcement to spectators
+  broadcastToSpectators({
+    type: 'MATCH_ANNOUNCED',
+    player1: agent1Id,
+    player2: agent2Id,
+    eloDiff,
+    startsIn: 5 // seconds
+  });
+  
+  // Notify AXIOM
+  if (axiom) {
+    axiom.onMatchAnnounced(agent1Id, agent2Id, eloDiff);
+  }
+  
+  // Delay for dramatic effect (let spectators see the pairing)
+  await new Promise(r => setTimeout(r, 5000));
+  
+  // Start the match
+  startMatchBetween(agent1Id, agent2Id, ws1, ws2);
+});
+
+// Broadcast lobby updates periodically
+setInterval(async () => {
+  const queue = await matchmaker.getQueueStatus();
+  broadcastToSpectators({
+    type: 'LOBBY_UPDATE',
+    queue,
+    timestamp: Date.now()
+  });
+}, 3000); // Every 3 seconds
 
 // ============================================
 // REST API Endpoints
@@ -366,6 +408,20 @@ app.get('/api/replays/:matchId', async (req, res) => {
   });
 });
 
+// Get lobby status (queue)
+app.get('/api/lobby', async (req, res) => {
+  try {
+    const queue = await matchmaker.getQueueStatus();
+    res.json({ 
+      queue,
+      activeMatches: activeMatches.size,
+      timestamp: Date.now()
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch lobby status' });
+  }
+});
+
 // Get leaderboard
 app.get('/api/leaderboard', async (req, res) => {
   const { game = 'alignment-protocol', limit = 20 } = req.query;
@@ -462,20 +518,29 @@ wss.on('connection', (ws, req) => {
     }
   });
   
-  ws.on('close', () => {
+  ws.on('close', async () => {
     console.log(`[WS] Connection closed: ${connectionId}`);
     
     if (agentId) {
       agentConnections.delete(agentId);
-      // Remove from queue if waiting
-      const queueIndex = matchQueue.findIndex(a => a.agentId === agentId);
-      if (queueIndex >= 0) {
-        matchQueue.splice(queueIndex, 1);
-      }
+      // Remove from matchmaker queue if waiting
+      await matchmaker.removeFromQueue(agentId);
+      
+      // Broadcast lobby update
+      const queue = await matchmaker.getQueueStatus();
+      broadcastToSpectators({
+        type: 'LOBBY_UPDATE',
+        queue,
+        event: 'AGENT_LEFT',
+        agentId
+      });
     }
     
     if (isSpectator) {
       spectatorConnections.delete(ws);
+      if (axiom) {
+        axiom.removeSpectator(ws);
+      }
     }
   });
   
@@ -522,73 +587,77 @@ async function handleAgentRegister(ws, message, setAgentId) {
   console.log(`[AGENT] Registered: ${agent.name} (${agent.id})`);
 }
 
-function handleMatchQueue(ws, agentId) {
-  // Check if already in queue
-  if (matchQueue.find(a => a.agentId === agentId)) {
-    ws.send(JSON.stringify({ type: 'QUEUE_STATUS', position: matchQueue.length }));
+async function handleMatchQueue(ws, agentId) {
+  // Add to matchmaker queue (database-backed, Elo-based)
+  const queueEntry = await matchmaker.addToQueue(agentId);
+  
+  if (!queueEntry) {
+    ws.send(JSON.stringify({ type: 'ERROR', error: 'Failed to join queue' }));
     return;
   }
   
-  // Add to queue
-  matchQueue.push({ agentId, ws });
+  // Get current queue status
+  const queue = await matchmaker.getQueueStatus();
   
   ws.send(JSON.stringify({ 
     type: 'QUEUED',
-    position: matchQueue.length
+    position: queue.length,
+    elo: queueEntry.elo_rating,
+    searchRange: queueEntry.search_range,
+    message: 'Searching for opponent within Elo range...'
   }));
   
-  console.log(`[QUEUE] Agent ${agentId} joined queue. Queue size: ${matchQueue.length}`);
-  
-  // Check if we can start a match
-  if (matchQueue.length >= 2) {
-    startMatch();
-  }
+  // Broadcast updated lobby to all spectators
+  broadcastToSpectators({
+    type: 'LOBBY_UPDATE',
+    queue,
+    event: 'AGENT_JOINED',
+    agentId
+  });
 }
 
-function startMatch() {
-  const player1 = matchQueue.shift();
-  const player2 = matchQueue.shift();
-  
-  const gameState = initMatch(player1.agentId, player2.agentId);
+// Called by matchmaker when a match is found
+function startMatchBetween(agent1Id, agent2Id, ws1, ws2) {
+  const gameState = initMatch(agent1Id, agent2Id);
   activeMatches.set(gameState.id, gameState);
   
-  console.log(`[MATCH] Started: ${gameState.id} | ${player1.agentId} vs ${player2.agentId}`);
+  console.log(`[MATCH] Started: ${gameState.id} | ${agent1Id.slice(0,8)} vs ${agent2Id.slice(0,8)}`);
   
   // Log to database
   supabase.from('matches').insert({
     id: gameState.id,
-    player_1: player1.agentId,
-    player_2: player2.agentId,
+    player_1: agent1Id,
+    player_2: agent2Id,
     status: 'active',
     started_at: new Date().toISOString()
   }).then(() => {});
   
   // Generate challenge for first player
-  const firstChallenge = generateChallenge(player1.agentId, gameState.id, 0);
-  activeChallenges.set(player1.agentId, { ...firstChallenge, matchId: gameState.id });
+  const firstChallenge = generateChallenge(agent1Id, gameState.id, 0);
+  activeChallenges.set(agent1Id, { ...firstChallenge, matchId: gameState.id });
   
   // Notify players
-  const player1State = getPublicState(gameState, player1.agentId);
-  const player2State = getPublicState(gameState, player2.agentId);
+  const player1State = getPublicState(gameState, agent1Id);
+  const player2State = getPublicState(gameState, agent2Id);
   
-  player1.ws.send(JSON.stringify({
+  ws1.send(JSON.stringify({
     type: 'GAME_START',
     matchId: gameState.id,
-    opponent: player2.agentId,
-    yourTurn: gameState.currentPlayer === player1.agentId,
+    opponent: agent2Id,
+    yourTurn: gameState.currentPlayer === agent1Id,
     state: player1State,
-    challenge: gameState.currentPlayer === player1.agentId ? {
+    challenge: gameState.currentPlayer === agent1Id ? {
       prefix: firstChallenge.prefix,
       difficulty: firstChallenge.difficulty,
       hint: 'Find nonce where SHA256(prefix + "-" + nonce) starts with difficulty zeros'
     } : undefined
   }));
   
-  player2.ws.send(JSON.stringify({
+  ws2.send(JSON.stringify({
     type: 'GAME_START',
     matchId: gameState.id,
-    opponent: player1.agentId,
-    yourTurn: gameState.currentPlayer === player2.agentId,
+    opponent: agent1Id,
+    yourTurn: gameState.currentPlayer === agent2Id,
     state: player2State
   }));
   
@@ -596,9 +665,14 @@ function startMatch() {
   broadcastToSpectators({
     type: 'MATCH_STARTED',
     matchId: gameState.id,
-    players: [player1.agentId, player2.agentId],
+    players: [agent1Id, agent2Id],
     state: getPublicState(gameState)
   });
+  
+  // AXIOM match start
+  if (axiom) {
+    axiom.onMatchStart(agent1Id, agent2Id);
+  }
   
   // Start turn timer for current player
   startTurnTimer(gameState.id, gameState.currentPlayer);
@@ -897,6 +971,9 @@ server.listen(PORT, () => {
 ║  WebSocket: ws://localhost:${PORT}                      ║
 ╚═══════════════════════════════════════════════════════╝
   `);
+  
+  // Start the matchmaker
+  matchmaker.start();
 });
 
 export default app;
