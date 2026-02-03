@@ -40,10 +40,7 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 app.use(express.static(path.join(__dirname, '../client')));
 
-// Redirect root to spectator page
-app.get('/', (req, res) => {
-  res.redirect('/spectator.html');
-});
+// Root serves the landing page (index.html via static)
 
 const server = createServer(app);
 const wss = new WebSocketServer({ server });
