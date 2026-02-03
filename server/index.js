@@ -34,11 +34,11 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Serve static files from client folder
+// Serve static files from public folder
 import path from 'path';
 import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-app.use(express.static(path.join(__dirname, '../client')));
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Redirect root to spectator page
 app.get('/', (req, res) => {
