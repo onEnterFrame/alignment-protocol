@@ -191,6 +191,7 @@
     .log-item.purge { color: #ff0000; }
     .log-item.conquer { color: #ffff00; }
     .log-item.monologue { color: #00ffff; font-style: italic; }
+    .log-item.delay { color: #ff6600; }
     
     .connect-btn {
       background: #00ff00;
@@ -380,11 +381,37 @@
           }
           break;
           
+        case 'TURN_DELAY':
+          // Show turn transition countdown
+          showTurnDelay(msg.nextPlayer, msg.delayMs);
+          break;
+          
         case 'MATCH_ENDED':
           addLog('🏆 MATCH ENDED! Winner: ' + msg.winner.slice(0, 8));
           addCommentary('GAME OVER!');
           break;
       }
+    }
+    
+    function showTurnDelay(nextPlayer, delayMs) {
+      const seconds = Math.ceil(delayMs / 1000);
+      const playerLabel = playerIds.indexOf(nextPlayer) === 0 ? 'Agent 1' : 'Agent 2';
+      addLog(`⏳ ${playerLabel}'s turn in ${seconds}s...`, 'delay');
+      
+      // Update turn indicator with countdown
+      const turnEl = document.getElementById('turnNum');
+      const originalText = turnEl.textContent;
+      let remaining = seconds;
+      
+      const countdown = setInterval(() => {
+        remaining--;
+        if (remaining > 0) {
+          turnEl.textContent = `${originalText} (${remaining}s)`;
+        } else {
+          turnEl.textContent = originalText;
+          clearInterval(countdown);
+        }
+      }, 1000);
     }
     
     function updateGameState(state) {

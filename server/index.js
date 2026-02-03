@@ -444,8 +444,25 @@ async function handleMove(ws, agentId, message) {
   if (gameState.status === 'complete') {
     await handleGameEnd(gameState);
   } else {
-    // Start timer for next player
-    startTurnTimer(matchId, gameState.currentPlayer);
+    // Minimum turn delay for spectator readability
+    const delayMs = RULES.MIN_TURN_DELAY_MS || 5000;
+    
+    // Notify spectators about the turn transition delay
+    broadcastToSpectators({
+      type: 'TURN_DELAY',
+      matchId,
+      nextPlayer: gameState.currentPlayer,
+      delayMs,
+      message: `Next turn in ${delayMs / 1000} seconds...`
+    });
+    
+    // Start timer for next player after delay
+    setTimeout(() => {
+      // Verify game still active (might have ended during delay)
+      if (activeMatches.has(matchId) && activeMatches.get(matchId).status === 'active') {
+        startTurnTimer(matchId, gameState.currentPlayer);
+      }
+    }, delayMs);
   }
 }
 

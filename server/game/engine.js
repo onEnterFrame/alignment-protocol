@@ -34,6 +34,7 @@ export const RULES = {
   
   // Timing
   TURN_TIMEOUT_MS: 30000,
+  MIN_TURN_DELAY_MS: 5000, // Minimum delay between turns for spectator readability
   
   // Starting resources
   STARTING_ENERGY: 100,
