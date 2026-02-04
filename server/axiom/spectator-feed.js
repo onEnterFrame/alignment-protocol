@@ -2,7 +2,7 @@
  * AXIOM Spectator Feed
  * 
  * Integrates AXIOM into the game server's WebSocket.
- * Listens to match events, generates commentary, broadcasts to spectators.
+ * Provides periodic play-by-play commentary every few turns.
  */
 
 import { AxiomCommentator } from './index.js';
@@ -14,86 +14,60 @@ export class AxiomSpectatorFeed {
     this.enabled = options.enabled !== false;
     this.audioEnabled = options.audioEnabled !== false;
     
-    // Commentary pacing
+    // Game state tracking
     this.turnCount = 0;
-    this.lastCommentTurn = -1;
-    this.agentCommentCount = new Map(); // Track comments per agent for balance
-    this.skipChance = 0.4; // 40% chance to skip routine events
+    this.lastCommentaryTurn = 0;
+    this.commentaryInterval = 3; // Comment every N turns
+    this.recentEvents = []; // Track recent events for summary
+    this.gameState = null;
   }
 
-  /**
-   * Add a spectator connection
-   */
   addSpectator(ws) {
     this.spectators.add(ws);
     ws.on('close', () => this.spectators.delete(ws));
     
     this.sendToSpectator(ws, {
       type: 'AXIOM_WELCOME',
-      message: "AXIOM online. Prepare for MAXIMUM DRAMA."
+      message: "AXIOM online. Let's see what these AIs have got."
     });
   }
 
-  /**
-   * Remove a spectator connection
-   */
   removeSpectator(ws) {
     this.spectators.delete(ws);
   }
 
   /**
-   * Decide if we should skip this event
-   */
-  shouldSkip(event) {
-    // Never skip these important events
-    const alwaysComment = ['MATCH_START', 'MATCH_END', 'MATCH_ANNOUNCED', 'TIMEOUT'];
-    if (alwaysComment.includes(event.type)) return false;
-    
-    // Never skip PURGE (dramatic!) or failed attacks
-    if (event.type === 'ACTION') {
-      if (event.action?.action === 'PURGE') return false;
-      if (event.action?.action === 'MERCY') return false;
-      // Comment on attacks (CONQUER against enemy territory)
-      if (event.result?.wasAttack) return false;
-    }
-    
-    // Skip if we just commented on the previous turn
-    if (this.turnCount - this.lastCommentTurn < 2) {
-      return Math.random() < 0.6; // 60% skip if recent comment
-    }
-    
-    // Balance agent coverage - if one agent has way more comments, skip their routine moves
-    if (event.agentId) {
-      const myCount = this.agentCommentCount.get(event.agentId) || 0;
-      const otherCount = [...this.agentCommentCount.values()].reduce((a, b) => a + b, 0) - myCount;
-      if (myCount > otherCount + 2) {
-        return Math.random() < 0.7; // 70% skip if this agent is over-represented
-      }
-    }
-    
-    // Random skip for variety
-    return Math.random() < this.skipChance;
-  }
-
-  /**
-   * Process a game event and broadcast commentary
+   * Process a game event - stores it for periodic summary
    */
   async processEvent(event) {
     if (!this.enabled) return;
     
-    // Check if we should skip this event
-    if (this.shouldSkip(event)) {
-      return;
+    // Store event for summary
+    this.recentEvents.push(event);
+    
+    // Keep last 6 events
+    if (this.recentEvents.length > 6) {
+      this.recentEvents.shift();
     }
+  }
+
+  /**
+   * Generate and broadcast periodic commentary
+   */
+  async generateCommentary() {
+    if (!this.enabled || this.recentEvents.length === 0) return;
 
     try {
-      const reaction = await this.axiom.react(event);
+      // Build summary of recent events
+      const summary = this.buildGameSummary();
+      
+      const reaction = await this.axiom.commentateOnSummary(summary);
       if (!reaction) return;
 
       const payload = {
         type: 'AXIOM_COMMENTARY',
         text: reaction.text,
-        eventType: reaction.event,
+        eventType: 'SUMMARY',
         timestamp: Date.now()
       };
 
@@ -103,23 +77,53 @@ export class AxiomSpectatorFeed {
       }
 
       this.broadcast(payload);
-      
-      // Track for pacing
-      this.lastCommentTurn = this.turnCount;
-      if (event.agentId) {
-        const count = this.agentCommentCount.get(event.agentId) || 0;
-        this.agentCommentCount.set(event.agentId, count + 1);
-      }
-
       console.log(`[AXIOM] ${reaction.text}`);
+      
+      // Clear recent events after commentary
+      this.recentEvents = [];
+      this.lastCommentaryTurn = this.turnCount;
+      
     } catch (err) {
-      console.error('[AXIOM] Failed to process event:', err.message);
+      console.error('[AXIOM] Failed to generate commentary:', err.message);
     }
   }
 
   /**
-   * Broadcast to all spectators
+   * Build a summary of recent game events for commentary
    */
+  buildGameSummary() {
+    const events = this.recentEvents;
+    const summary = {
+      turnCount: this.turnCount,
+      recentMoves: [],
+      greenActions: [],
+      redActions: []
+    };
+
+    for (const event of events) {
+      if (event.type === 'ACTION') {
+        const color = this.axiom.getAgentColor(event.agentId);
+        const move = {
+          color,
+          action: event.action?.action,
+          success: event.result?.result === 'captured' || event.result?.result === 'success',
+          wasAttack: event.result?.wasAttack,
+          casualties: event.result?.casualties,
+          purged: event.result?.populationPurged
+        };
+        
+        summary.recentMoves.push(move);
+        if (color === 'GREEN') {
+          summary.greenActions.push(move);
+        } else {
+          summary.redActions.push(move);
+        }
+      }
+    }
+
+    return summary;
+  }
+
   broadcast(payload) {
     const message = JSON.stringify(payload);
     for (const ws of this.spectators) {
@@ -129,54 +133,96 @@ export class AxiomSpectatorFeed {
     }
   }
 
-  /**
-   * Send to single spectator
-   */
   sendToSpectator(ws, payload) {
     if (ws.readyState === 1) {
       ws.send(JSON.stringify(payload));
     }
   }
 
-  /**
-   * Hook into game server events
-   */
-  onMonologue(agentId, monologue) {
-    // Skip most monologues - they happen every turn
-    if (Math.random() < 0.7) return; // Only comment on 30% of monologues
-    this.processEvent({ type: 'MONOLOGUE', agentId, monologue });
-  }
-
+  // Called on every action - track and maybe comment
   onAction(agentId, action, result) {
     this.turnCount++;
     this.processEvent({ type: 'ACTION', agentId, action, result });
+    
+    // Generate commentary every N turns
+    if (this.turnCount - this.lastCommentaryTurn >= this.commentaryInterval) {
+      this.generateCommentary();
+    }
+  }
+
+  // Monologues - just track, don't trigger commentary
+  onMonologue(agentId, monologue) {
+    this.processEvent({ type: 'MONOLOGUE', agentId, monologue });
   }
 
   onTurnStart(agentId, turn) {
-    // Skip turn start events entirely - too chatty
-    // this.processEvent({ type: 'TURN_START', agentId, turn });
+    // Skip - too chatty
   }
 
   onMatchAnnounced(agent1Id, agent2Id, eloDiff) {
-    this.processEvent({ type: 'MATCH_ANNOUNCED', agent1Id, agent2Id, eloDiff });
-  }
-
-  onMatchStart(matchId, agent1, agent2) {
-    // Reset tracking for new match
-    this.turnCount = 0;
-    this.lastCommentTurn = -1;
-    this.agentCommentCount.clear();
+    // Immediate commentary for match start
     this.axiom.resetColors();
+    this.axiom.getAgentColor(agent1Id); // Set GREEN
+    this.axiom.getAgentColor(agent2Id); // Set RED
     
-    this.processEvent({ type: 'MATCH_START', matchId, agent1, agent2 });
+    this.broadcastImmediate(`GREEN vs RED — let's see who draws first blood!`);
   }
 
-  onMatchEnd(winner, reason) {
-    this.processEvent({ type: 'MATCH_END', winner, reason });
+  async onMatchStart(matchId, agent1, agent2) {
+    // Reset tracking
+    this.turnCount = 0;
+    this.lastCommentaryTurn = 0;
+    this.recentEvents = [];
+  }
+
+  async onMatchEnd(winner, reason) {
+    const winColor = this.axiom.getAgentColor(winner);
+    const loseColor = winColor === 'GREEN' ? 'RED' : 'GREEN';
+    
+    // Generate final commentary
+    const summary = this.buildGameSummary();
+    summary.winner = winColor;
+    summary.loser = loseColor;
+    summary.reason = reason;
+    
+    try {
+      const reaction = await this.axiom.commentateOnEnding(summary);
+      if (reaction) {
+        const payload = {
+          type: 'AXIOM_COMMENTARY',
+          text: reaction.text,
+          eventType: 'MATCH_END',
+          timestamp: Date.now()
+        };
+
+        if (this.audioEnabled && reaction.audio) {
+          payload.audio = reaction.audio.toString('base64');
+          payload.audioFormat = 'mp3';
+        }
+
+        this.broadcast(payload);
+        console.log(`[AXIOM] ${reaction.text}`);
+      }
+    } catch (err) {
+      console.error('[AXIOM] Failed to generate ending:', err.message);
+    }
   }
 
   onTimeout(agentId) {
-    this.processEvent({ type: 'TIMEOUT', agentId });
+    const color = this.axiom.getAgentColor(agentId);
+    this.broadcastImmediate(`${color} ran out of time! Clock management matters, folks.`);
+  }
+
+  // Quick broadcast without AI generation
+  broadcastImmediate(text) {
+    const payload = {
+      type: 'AXIOM_COMMENTARY',
+      text,
+      eventType: 'IMMEDIATE',
+      timestamp: Date.now()
+    };
+    this.broadcast(payload);
+    console.log(`[AXIOM] ${text}`);
   }
 }
 
