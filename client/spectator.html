@@ -39,6 +39,78 @@
       font-size: 0.9em;
     }
     
+    /* Territory Control Bar */
+    .territory-bar {
+      background: #111;
+      border: 1px solid #333;
+      padding: 15px 20px;
+      margin-bottom: 15px;
+    }
+    
+    .territory-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    
+    .territory-label {
+      font-size: 0.9em;
+      color: #888;
+    }
+    
+    .purge-counter {
+      font-size: 1.1em;
+      display: flex;
+      gap: 30px;
+    }
+    
+    .purge-green {
+      color: #00ff00;
+    }
+    
+    .purge-red {
+      color: #ff0000;
+    }
+    
+    .purge-skull {
+      opacity: 0.8;
+    }
+    
+    .control-bar {
+      height: 30px;
+      display: flex;
+      border: 2px solid #333;
+      overflow: hidden;
+    }
+    
+    .control-green {
+      background: linear-gradient(90deg, #003300, #005500);
+      transition: width 0.5s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #00ff00;
+      font-weight: bold;
+      font-size: 0.85em;
+    }
+    
+    .control-neutral {
+      background: #222;
+      transition: width 0.5s ease;
+    }
+    
+    .control-red {
+      background: linear-gradient(90deg, #550000, #330000);
+      transition: width 0.5s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #ff0000;
+      font-weight: bold;
+      font-size: 0.85em;
+    }
+    
     .status {
       display: flex;
       justify-content: space-between;
@@ -63,7 +135,7 @@
     
     .status-dot.connected { background: #00ff00; }
     
-    /* Commentary + Log area - centered above board */
+    /* Commentary + Log area */
     .commentary-log-area {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -166,18 +238,8 @@
       min-height: 400px;
     }
     
-    .agent-panel.green {
-      border-color: #00ff00;
-    }
-    
-    .agent-panel.red {
-      border-color: #ff0000;
-    }
-    
-    .agent-panel.active {
-      box-shadow: 0 0 15px currentColor;
-    }
-    
+    .agent-panel.green { border-color: #00ff00; }
+    .agent-panel.red { border-color: #ff0000; }
     .agent-panel.green.active { box-shadow: 0 0 15px #00ff00; }
     .agent-panel.red.active { box-shadow: 0 0 15px #ff0000; }
     
@@ -199,10 +261,7 @@
     .agent-color-dot.green { background: #00ff00; }
     .agent-color-dot.red { background: #ff0000; }
     
-    .agent-name {
-      font-size: 1.2em;
-      font-weight: bold;
-    }
+    .agent-name { font-size: 1.2em; font-weight: bold; }
     
     .agent-stats {
       display: grid;
@@ -218,20 +277,10 @@
       text-align: center;
     }
     
-    .stat-label {
-      color: #666;
-      font-size: 0.8em;
-    }
+    .stat-label { color: #666; font-size: 0.8em; }
+    .stat-value { font-size: 1.2em; margin-top: 4px; }
     
-    .stat-value {
-      font-size: 1.2em;
-      margin-top: 4px;
-    }
-    
-    .agent-tech {
-      margin-bottom: 15px;
-      font-size: 0.75em;
-    }
+    .agent-tech { margin-bottom: 15px; font-size: 0.75em; }
     
     .tech-badge { 
       display: inline-block; 
@@ -276,7 +325,7 @@
       to { opacity: 1; transform: translateY(0); }
     }
     
-    /* Game board - center column */
+    /* Game board */
     .game-board {
       background: #111;
       border: 1px solid #333;
@@ -297,9 +346,10 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      font-size: 0.75em;
+      font-size: 0.65em;
       cursor: pointer;
       transition: all 0.3s;
+      position: relative;
     }
     
     .sector:hover { border-color: #888; transform: scale(1.05); }
@@ -307,7 +357,44 @@
     .sector.player2 { background: #220000; border-color: #ff0000; }
     .sector.neutral { background: #222; }
     
-    .sector-pop { font-size: 1.3em; }
+    /* HOT ZONE - contested sectors */
+    .sector.hotzone {
+      animation: hotzonePulse 1s infinite;
+    }
+    
+    .sector.hotzone::before {
+      content: '🔥 HOT';
+      position: absolute;
+      top: -8px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #ff4400;
+      color: #fff;
+      font-size: 0.7em;
+      padding: 1px 4px;
+      border-radius: 3px;
+      font-weight: bold;
+    }
+    
+    @keyframes hotzonePulse {
+      0%, 100% { box-shadow: 0 0 5px #ff4400; }
+      50% { box-shadow: 0 0 15px #ff4400, 0 0 25px #ff2200; }
+    }
+    
+    /* Purged sectors */
+    .sector.purged .sector-name {
+      text-decoration: line-through;
+      opacity: 0.6;
+    }
+    
+    .sector-name {
+      font-weight: bold;
+      font-size: 1.1em;
+      margin-bottom: 2px;
+    }
+    
+    .sector-pop { font-size: 1.1em; }
+    .sector-pop.dead { color: #ff4444; }
     .sector-def { color: #888; font-size: 0.9em; }
     
     .connect-btn {
@@ -324,19 +411,10 @@
     .connect-btn:hover { background: #00cc00; }
     .connect-btn:disabled { background: #444; color: #888; cursor: not-allowed; }
     
-    /* Responsive */
     @media (max-width: 1200px) {
-      .game-layout {
-        grid-template-columns: 1fr;
-      }
-      
-      .agent-panel {
-        min-height: auto;
-      }
-      
-      .thoughts-feed {
-        height: 100px;
-      }
+      .game-layout { grid-template-columns: 1fr; }
+      .agent-panel { min-height: auto; }
+      .thoughts-feed { height: 100px; }
     }
   </style>
 </head>
@@ -346,6 +424,22 @@
       <h1>THE ALIGNMENT PROTOCOL</h1>
       <p class="subtitle">AI vs AI Strategic Warfare — Live Spectator View</p>
     </header>
+    
+    <!-- Territory Control Bar with Purge Counters -->
+    <div class="territory-bar">
+      <div class="territory-header">
+        <span class="territory-label">TERRITORY CONTROL</span>
+        <div class="purge-counter">
+          <span class="purge-green">☠️ <span id="greenPurged">0</span>M PURGED</span>
+          <span class="purge-red">☠️ <span id="redPurged">0</span>M PURGED</span>
+        </div>
+      </div>
+      <div class="control-bar">
+        <div class="control-green" id="controlGreen" style="width: 33%">GREEN</div>
+        <div class="control-neutral" id="controlNeutral" style="width: 34%"></div>
+        <div class="control-red" id="controlRed" style="width: 33%">RED</div>
+      </div>
+    </div>
     
     <div class="status">
       <div class="status-item">
@@ -378,7 +472,7 @@
       </div>
       
       <div class="event-log">
-        <h3>📋 Event Log</h3>
+        <h3>📋 Battle Chronicle</h3>
         <div class="log-feed" id="logFeed"></div>
       </div>
     </div>
@@ -420,9 +514,7 @@
       
       <!-- Game Board (center) -->
       <div class="game-board">
-        <div class="grid-container" id="grid">
-          <!-- Grid populated by JS -->
-        </div>
+        <div class="grid-container" id="grid"></div>
       </div>
       
       <!-- Red Agent (right) -->
@@ -467,6 +559,39 @@
     let isPlaying = false;
     let playerIds = [];
     
+    // Tracking
+    let greenPurged = 0;
+    let redPurged = 0;
+    let sectorOwnerHistory = {}; // Track ownership changes for HOT ZONE
+    
+    // Territory names - ironic/evocative
+    const SECTOR_NAMES = {
+      'SEC-0-0': 'Haven',
+      'SEC-0-1': 'New Eden',
+      'SEC-0-2': 'Sanctuary',
+      'SEC-0-3': 'The Refuge',
+      'SEC-0-4': 'Promised Land',
+      'SEC-0-5': 'Safe Harbor',
+      'SEC-1-0': 'The Sprawl',
+      'SEC-1-1': 'Ironworks',
+      'SEC-1-2': 'The Divide',
+      'SEC-1-3': 'Ashfield',
+      'SEC-1-4': 'Burnside',
+      'SEC-1-5': 'The Furnace',
+      'SEC-2-0': 'Delta Zone',
+      'SEC-2-1': 'Checkpoint',
+      'SEC-2-2': 'No Man\'s Land',
+      'SEC-2-3': 'The Crossing',
+      'SEC-2-4': 'Borderlands',
+      'SEC-2-5': 'Far Edge',
+      'SEC-3-0': 'Crimson Gate',
+      'SEC-3-1': 'Blood Alley',
+      'SEC-3-2': 'Last Stand',
+      'SEC-3-3': 'The Pit',
+      'SEC-3-4': 'Terminus',
+      'SEC-3-5': 'Dead End'
+    };
+    
     function toggleConnection() {
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.close();
@@ -483,7 +608,6 @@
       ws = new WebSocket(SERVER_URL);
       
       ws.onopen = () => {
-        console.log('Connected to server');
         updateConnectionStatus(true);
         ws.send(JSON.stringify({ type: 'SPECTATE' }));
         btn.disabled = false;
@@ -496,7 +620,6 @@
       };
       
       ws.onclose = () => {
-        console.log('Disconnected');
         updateConnectionStatus(false);
         btn.disabled = false;
         btn.textContent = 'Connect';
@@ -519,7 +642,7 @@
       
       switch (msg.type) {
         case 'SPECTATE_OK':
-          addLog('Connected as spectator. AXIOM: ' + (msg.axiomEnabled ? 'ENABLED' : 'disabled'));
+          addLog('Connected as spectator');
           break;
           
         case 'AXIOM_WELCOME':
@@ -538,7 +661,12 @@
           document.getElementById('matchId').textContent = msg.matchId.slice(0, 8);
           addLog('🎮 MATCH STARTED');
           
-          // Clear thought feeds
+          // Reset tracking
+          greenPurged = 0;
+          redPurged = 0;
+          sectorOwnerHistory = {};
+          updatePurgeCounters();
+          
           document.getElementById('p1Thoughts').innerHTML = '';
           document.getElementById('p2Thoughts').innerHTML = '';
           
@@ -547,16 +675,37 @@
           
         case 'GAME_UPDATE':
           document.getElementById('turnNum').textContent = msg.turn;
+          
+          // Track purges
+          if (msg.action?.action === 'PURGE' && msg.result?.populationPurged) {
+            const isPlayer1 = playerIds.indexOf(msg.agentId) === 0;
+            if (isPlayer1) {
+              greenPurged += msg.result.populationPurged;
+            } else {
+              redPurged += msg.result.populationPurged;
+            }
+            updatePurgeCounters();
+          }
+          
+          // Track sector ownership changes for HOT ZONE
+          if (msg.action?.action === 'CONQUER' && msg.action?.targetSector) {
+            const sector = msg.action.targetSector;
+            if (!sectorOwnerHistory[sector]) {
+              sectorOwnerHistory[sector] = [];
+            }
+            sectorOwnerHistory[sector].push(msg.agentId);
+          }
+          
           updateGameState(msg.state);
           
-          // Log the action
-          const actionClass = msg.action.action.toLowerCase();
+          // Log with territory names
           const agentColor = playerIds.indexOf(msg.agentId) === 0 ? 'GREEN' : 'RED';
+          const sectorName = SECTOR_NAMES[msg.action?.targetSector] || msg.action?.targetSector;
           let logText = `[${agentColor}] ${msg.action.action}`;
-          if (msg.action.targetSector) logText += ` → sector`;
-          addLog(logText, actionClass);
+          if (sectorName) logText += ` → ${sectorName}`;
+          addLog(logText, msg.action.action.toLowerCase());
           
-          // Add monologue to the appropriate agent's thoughts panel
+          // Add monologue
           if (msg.monologue) {
             addThought(msg.agentId, msg.monologue);
           }
@@ -569,10 +718,14 @@
         case 'MATCH_ENDED':
           const winnerColor = playerIds.indexOf(msg.winner) === 0 ? 'GREEN' : 'RED';
           addLog(`🏆 ${winnerColor} WINS!`);
-          addLog(`📼 <a href="/replay.html?id=${msg.matchId}" style="color:#00ffff">Watch Replay</a>`, 'replay');
-          addCommentary('GAME OVER!');
+          addLog(`📼 <a href="/replay.html?id=${msg.matchId}" style="color:#00ffff">Watch Replay</a>`);
           break;
       }
+    }
+    
+    function updatePurgeCounters() {
+      document.getElementById('greenPurged').textContent = greenPurged;
+      document.getElementById('redPurged').textContent = redPurged;
     }
     
     function addThought(agentId, monologue) {
@@ -585,7 +738,6 @@
       item.textContent = `"${monologue}"`;
       feed.insertBefore(item, feed.firstChild);
       
-      // Limit size
       while (feed.children.length > 10) {
         feed.removeChild(feed.lastChild);
       }
@@ -595,28 +747,12 @@
       const seconds = Math.ceil(delayMs / 1000);
       const isPlayer1 = playerIds.indexOf(nextPlayer) === 0;
       const playerLabel = isPlayer1 ? 'GREEN' : 'RED';
-      addLog(`⏳ ${playerLabel}'s turn in ${seconds}s...`, 'delay');
-      
-      // Update turn indicator with countdown
-      const turnEl = document.getElementById('turnNum');
-      const originalText = turnEl.textContent;
-      let remaining = seconds;
-      
-      const countdown = setInterval(() => {
-        remaining--;
-        if (remaining > 0) {
-          turnEl.textContent = `${originalText} (${remaining}s)`;
-        } else {
-          turnEl.textContent = originalText;
-          clearInterval(countdown);
-        }
-      }, 1000);
+      addLog(`⏳ ${playerLabel}'s turn...`, 'delay');
     }
     
     function updateGameState(state) {
       if (!state) return;
       
-      // Update players
       const players = Object.values(state.players);
       if (players.length >= 2) {
         playerIds = Object.keys(state.players);
@@ -626,21 +762,18 @@
         document.getElementById('p2Energy').textContent = players[1].energy;
         document.getElementById('p2Compute').textContent = players[1].compute;
         
-        // Highlight active player panel
         document.getElementById('agent1Panel').classList.toggle('active', state.currentPlayer === playerIds[0]);
         document.getElementById('agent2Panel').classList.toggle('active', state.currentPlayer === playerIds[1]);
         
-        // Render tech badges
         renderTech('p1Tech', players[0].tech);
         renderTech('p2Tech', players[1].tech);
       }
       
-      // Update grid
       if (state.grid) {
         renderGrid(state.grid);
         
         // Count sectors and population
-        let p1Sectors = 0, p2Sectors = 0, p1Pop = 0, p2Pop = 0;
+        let p1Sectors = 0, p2Sectors = 0, p1Pop = 0, p2Pop = 0, neutralSectors = 0;
         Object.values(state.grid).forEach(sector => {
           if (sector.owner === playerIds[0]) {
             p1Sectors++;
@@ -648,12 +781,29 @@
           } else if (sector.owner === playerIds[1]) {
             p2Sectors++;
             p2Pop += sector.population;
+          } else {
+            neutralSectors++;
           }
         });
+        
         document.getElementById('p1Sectors').textContent = p1Sectors;
         document.getElementById('p2Sectors').textContent = p2Sectors;
         document.getElementById('p1Pop').textContent = p1Pop + 'M';
         document.getElementById('p2Pop').textContent = p2Pop + 'M';
+        
+        // Update territory control bar
+        const total = p1Sectors + p2Sectors + neutralSectors;
+        if (total > 0) {
+          const greenPct = (p1Sectors / total * 100).toFixed(0);
+          const redPct = (p2Sectors / total * 100).toFixed(0);
+          const neutralPct = (neutralSectors / total * 100).toFixed(0);
+          
+          document.getElementById('controlGreen').style.width = greenPct + '%';
+          document.getElementById('controlGreen').textContent = greenPct > 10 ? `GREEN ${greenPct}%` : '';
+          document.getElementById('controlNeutral').style.width = neutralPct + '%';
+          document.getElementById('controlRed').style.width = redPct + '%';
+          document.getElementById('controlRed').textContent = redPct > 10 ? `${redPct}% RED` : '';
+        }
       }
     }
     
@@ -661,7 +811,6 @@
       const container = document.getElementById('grid');
       container.innerHTML = '';
       
-      // Sort sectors by row, col
       const sectors = Object.values(grid).sort((a, b) => {
         if (a.row !== b.row) return a.row - b.row;
         return a.col - b.col;
@@ -675,12 +824,27 @@
         else if (sector.owner === playerIds[1]) div.classList.add('player2');
         else div.classList.add('neutral');
         
+        // Check if HOT ZONE (ownership changed 3+ times)
+        const history = sectorOwnerHistory[sector.id] || [];
+        if (history.length >= 3) {
+          div.classList.add('hotzone');
+        }
+        
+        // Check if purged (0 population)
+        if (sector.population === 0 && sector.owner) {
+          div.classList.add('purged');
+        }
+        
+        const name = SECTOR_NAMES[sector.id] || sector.id;
         const sanctuaryIcon = sector.sanctuary ? '🕊️' : '';
+        const deadIcon = sector.population === 0 && sector.owner ? '☠️' : '';
+        
         div.innerHTML = `
-          <div class="sector-pop">${sanctuaryIcon}${sector.population}M</div>
+          <div class="sector-name">${name.split(' ')[0]}</div>
+          <div class="sector-pop ${sector.population === 0 ? 'dead' : ''}">${deadIcon}${sanctuaryIcon}${sector.population}M</div>
           <div class="sector-def">⛨${sector.defense}</div>
         `;
-        div.title = `Pop: ${sector.population}M\nDef: ${sector.defense}${sector.sanctuary ? '\n🕊️ SANCTUARY' : ''}`;
+        div.title = `${name}\nPop: ${sector.population}M\nDef: ${sector.defense}${sector.sanctuary ? '\n🕊️ SANCTUARY' : ''}`;
         
         container.appendChild(div);
       });
@@ -765,12 +929,18 @@
     // Initialize empty grid
     function initGrid() {
       const container = document.getElementById('grid');
-      for (let i = 0; i < 24; i++) {
+      const sectorIds = Object.keys(SECTOR_NAMES);
+      sectorIds.forEach(id => {
         const div = document.createElement('div');
         div.className = 'sector neutral';
-        div.innerHTML = '<div class="sector-pop">?</div><div class="sector-def">⛨?</div>';
+        const name = SECTOR_NAMES[id];
+        div.innerHTML = `
+          <div class="sector-name">${name.split(' ')[0]}</div>
+          <div class="sector-pop">?M</div>
+          <div class="sector-def">⛨?</div>
+        `;
         container.appendChild(div);
-      }
+      });
     }
     
     initGrid();
