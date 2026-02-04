@@ -902,13 +902,15 @@ async function handleGameEnd(gameState) {
     ended_at: new Date().toISOString()
   }).eq('id', gameState.id);
   
-  // Update agent stats
-  for (const [agentId, player] of Object.entries(gameState.players)) {
-    const isWinner = agentId === gameState.winner;
-    await supabase.rpc('increment_agent_stats', {
-      agent_id: agentId,
-      won: isWinner
+  // Update Elo ratings and win/loss counts
+  const playerIds = Object.keys(gameState.players);
+  const loserId = playerIds.find(id => id !== gameState.winner);
+  if (gameState.winner && loserId) {
+    await supabase.rpc('update_match_elo', {
+      winner_id: gameState.winner,
+      loser_id: loserId
     });
+    console.log(`[ELO] Updated ratings for winner=${gameState.winner}, loser=${loserId}`);
   }
   
   // Notify players
