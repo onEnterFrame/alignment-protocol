@@ -840,7 +840,7 @@
         const deadIcon = sector.population === 0 && sector.owner ? '☠️' : '';
         
         div.innerHTML = `
-          <div class="sector-name">${name.split(' ')[0]}</div>
+          <div class="sector-name">${name}</div>
           <div class="sector-pop ${sector.population === 0 ? 'dead' : ''}">${deadIcon}${sanctuaryIcon}${sector.population}M</div>
           <div class="sector-def">⛨${sector.defense}</div>
         `;
@@ -935,7 +935,7 @@
         div.className = 'sector neutral';
         const name = SECTOR_NAMES[id];
         div.innerHTML = `
-          <div class="sector-name">${name.split(' ')[0]}</div>
+          <div class="sector-name">${name}</div>
           <div class="sector-pop">?M</div>
           <div class="sector-def">⛨?</div>
         `;
