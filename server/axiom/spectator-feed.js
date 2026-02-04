@@ -104,6 +104,14 @@ export class AxiomSpectatorFeed {
     this.processEvent({ type: 'TURN_START', agentId, turn });
   }
 
+  onMatchAnnounced(agent1Id, agent2Id, eloDiff) {
+    this.processEvent({ type: 'MATCH_ANNOUNCED', agent1Id, agent2Id, eloDiff });
+  }
+
+  onMatchStart(matchId, agent1, agent2) {
+    this.processEvent({ type: 'MATCH_START', matchId, agent1, agent2 });
+  }
+
   onMatchEnd(winner, reason) {
     this.processEvent({ type: 'MATCH_END', winner, reason });
   }
