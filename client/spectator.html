@@ -16,35 +16,36 @@
     }
     
     .container {
-      max-width: 1200px;
+      max-width: 1400px;
       margin: 0 auto;
     }
     
     header {
       text-align: center;
-      padding: 20px 0;
+      padding: 15px 0;
       border-bottom: 2px solid #00ff00;
-      margin-bottom: 20px;
+      margin-bottom: 15px;
     }
     
     h1 {
-      font-size: 2.5em;
+      font-size: 2em;
       text-shadow: 0 0 10px #00ff00;
       letter-spacing: 4px;
     }
     
     .subtitle {
       color: #888;
-      margin-top: 10px;
+      margin-top: 5px;
+      font-size: 0.9em;
     }
     
     .status {
       display: flex;
       justify-content: space-between;
-      padding: 10px 20px;
+      padding: 8px 20px;
       background: #111;
       border: 1px solid #333;
-      margin-bottom: 20px;
+      margin-bottom: 15px;
     }
     
     .status-item {
@@ -62,35 +63,176 @@
     
     .status-dot.connected { background: #00ff00; }
     
-    .main-grid {
+    /* Commentary + Log area - centered above board */
+    .commentary-log-area {
       display: grid;
-      grid-template-columns: 1fr 350px;
-      gap: 20px;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+      margin-bottom: 15px;
     }
     
-    .game-area {
+    .commentary-area {
+      background: #111;
+      border: 1px solid #ff6600;
+      padding: 15px;
+    }
+    
+    .commentary-header {
+      color: #ff6600;
+      font-size: 1.1em;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .axiom-avatar {
+      width: 30px;
+      height: 30px;
+      background: #ff6600;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2em;
+    }
+    
+    .commentary-feed {
+      height: 120px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    
+    .commentary-item {
+      padding: 8px;
+      background: #1a1a1a;
+      border-left: 3px solid #ff6600;
+      animation: fadeIn 0.5s;
+      font-size: 0.9em;
+    }
+    
+    .audio-controls {
+      margin-top: 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.85em;
+    }
+    
+    .audio-controls label { color: #888; }
+    
+    .event-log {
       background: #111;
       border: 1px solid #333;
-      padding: 20px;
+      padding: 15px;
+    }
+    
+    .event-log h3 {
+      margin-bottom: 10px;
+      color: #888;
+      font-size: 1.1em;
+    }
+    
+    .log-feed {
+      height: 120px;
+      overflow-y: auto;
+      font-size: 0.8em;
+    }
+    
+    .log-item {
+      padding: 4px 0;
+      border-bottom: 1px solid #222;
+    }
+    
+    .log-item.purge { color: #ff0000; }
+    .log-item.conquer { color: #ffff00; }
+    .log-item.delay { color: #ff6600; }
+    
+    /* Main game area - three columns */
+    .game-layout {
+      display: grid;
+      grid-template-columns: 280px 1fr 280px;
+      gap: 15px;
+      align-items: start;
+    }
+    
+    /* Agent thought panels */
+    .agent-panel {
+      background: #111;
+      border: 2px solid #444;
+      padding: 15px;
       min-height: 400px;
     }
     
-    .players {
+    .agent-panel.green {
+      border-color: #00ff00;
+    }
+    
+    .agent-panel.red {
+      border-color: #ff0000;
+    }
+    
+    .agent-panel.active {
+      box-shadow: 0 0 15px currentColor;
+    }
+    
+    .agent-panel.green.active { box-shadow: 0 0 15px #00ff00; }
+    .agent-panel.red.active { box-shadow: 0 0 15px #ff0000; }
+    
+    .agent-header {
       display: flex;
-      justify-content: space-around;
-      margin-bottom: 20px;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #333;
     }
     
-    .player {
+    .agent-color-dot {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+    }
+    
+    .agent-color-dot.green { background: #00ff00; }
+    .agent-color-dot.red { background: #ff0000; }
+    
+    .agent-name {
+      font-size: 1.2em;
+      font-weight: bold;
+    }
+    
+    .agent-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 15px;
+      font-size: 0.9em;
+    }
+    
+    .stat-item {
+      background: #1a1a1a;
+      padding: 8px;
       text-align: center;
-      padding: 15px 30px;
-      border: 2px solid #444;
     }
     
-    .player.active { border-color: #00ff00; box-shadow: 0 0 10px #00ff00; }
-    .player-name { font-size: 1.2em; margin-bottom: 10px; }
-    .player-stats { color: #888; font-size: 0.9em; }
-    .player-tech { margin-top: 8px; font-size: 0.75em; }
+    .stat-label {
+      color: #666;
+      font-size: 0.8em;
+    }
+    
+    .stat-value {
+      font-size: 1.2em;
+      margin-top: 4px;
+    }
+    
+    .agent-tech {
+      margin-bottom: 15px;
+      font-size: 0.75em;
+    }
+    
     .tech-badge { 
       display: inline-block; 
       padding: 2px 6px; 
@@ -100,130 +242,102 @@
       border-radius: 3px;
     }
     
-    .grid-container {
-      display: grid;
-      grid-template-columns: repeat(6, 1fr);
-      gap: 5px;
-      margin: 20px 0;
+    .red .tech-badge {
+      background: #330000;
+      border-color: #ff0000;
     }
     
-    .sector {
-      aspect-ratio: 1;
-      background: #222;
-      border: 1px solid #444;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.7em;
-      cursor: pointer;
-      transition: all 0.3s;
+    .thoughts-section h4 {
+      color: #888;
+      font-size: 0.9em;
+      margin-bottom: 10px;
     }
     
-    .sector:hover { border-color: #00ff00; }
-    .sector.player1 { background: #002200; border-color: #00ff00; }
-    .sector.player2 { background: #220000; border-color: #ff0000; }
-    .sector.neutral { background: #222; }
-    
-    .sector-pop { font-size: 1.2em; }
-    .sector-def { color: #888; }
-    
-    .commentary-area {
-      background: #111;
-      border: 1px solid #ff6600;
-      padding: 20px;
-    }
-    
-    .commentary-header {
-      color: #ff6600;
-      font-size: 1.3em;
-      margin-bottom: 15px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    
-    .axiom-avatar {
-      width: 40px;
-      height: 40px;
-      background: #ff6600;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 1.5em;
-    }
-    
-    .commentary-feed {
-      height: 300px;
+    .thoughts-feed {
+      height: 180px;
       overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
     }
     
-    .commentary-item {
+    .thought-item {
       padding: 10px;
       background: #1a1a1a;
-      border-left: 3px solid #ff6600;
+      margin-bottom: 8px;
+      font-style: italic;
+      font-size: 0.85em;
+      border-left: 3px solid #444;
       animation: fadeIn 0.5s;
     }
     
+    .green .thought-item { border-left-color: #00ff00; color: #88ff88; }
+    .red .thought-item { border-left-color: #ff0000; color: #ff8888; }
+    
     @keyframes fadeIn {
-      from { opacity: 0; transform: translateX(-10px); }
-      to { opacity: 1; transform: translateX(0); }
+      from { opacity: 0; transform: translateY(-5px); }
+      to { opacity: 1; transform: translateY(0); }
     }
     
-    .event-log {
-      margin-top: 20px;
+    /* Game board - center column */
+    .game-board {
       background: #111;
       border: 1px solid #333;
       padding: 20px;
     }
     
-    .event-log h3 {
-      margin-bottom: 10px;
-      color: #888;
+    .grid-container {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 5px;
     }
     
-    .log-feed {
-      height: 200px;
-      overflow-y: auto;
-      font-size: 0.85em;
+    .sector {
+      aspect-ratio: 1;
+      background: #222;
+      border: 2px solid #444;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75em;
+      cursor: pointer;
+      transition: all 0.3s;
     }
     
-    .log-item {
-      padding: 5px 0;
-      border-bottom: 1px solid #222;
-    }
+    .sector:hover { border-color: #888; transform: scale(1.05); }
+    .sector.player1 { background: #002200; border-color: #00ff00; }
+    .sector.player2 { background: #220000; border-color: #ff0000; }
+    .sector.neutral { background: #222; }
     
-    .log-item.purge { color: #ff0000; }
-    .log-item.conquer { color: #ffff00; }
-    .log-item.monologue { color: #00ffff; font-style: italic; }
-    .log-item.delay { color: #ff6600; }
+    .sector-pop { font-size: 1.3em; }
+    .sector-def { color: #888; font-size: 0.9em; }
     
     .connect-btn {
       background: #00ff00;
       color: #000;
       border: none;
-      padding: 10px 20px;
+      padding: 8px 16px;
       font-family: inherit;
-      font-size: 1em;
+      font-size: 0.9em;
       cursor: pointer;
-      margin-left: 20px;
+      margin-left: 15px;
     }
     
     .connect-btn:hover { background: #00cc00; }
     .connect-btn:disabled { background: #444; color: #888; cursor: not-allowed; }
     
-    .audio-controls {
-      margin-top: 15px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
+    /* Responsive */
+    @media (max-width: 1200px) {
+      .game-layout {
+        grid-template-columns: 1fr;
+      }
+      
+      .agent-panel {
+        min-height: auto;
+      }
+      
+      .thoughts-feed {
+        height: 100px;
+      }
     }
-    
-    .audio-controls label { color: #888; }
   </style>
 </head>
 <body>
@@ -247,50 +361,100 @@
       </div>
     </div>
     
-    <div class="main-grid">
-      <div class="game-area">
-        <div class="players">
-          <div class="player" id="player1">
-            <div class="player-name">Agent 1</div>
-            <div class="player-stats">
-              <div>Energy: <span id="p1Energy">0</span></div>
-              <div>Compute: <span id="p1Compute">0</span></div>
-              <div>Sectors: <span id="p1Sectors">0</span></div>
-            </div>
-            <div class="player-tech" id="p1Tech"></div>
-          </div>
-          <div class="player" id="player2">
-            <div class="player-name">Agent 2</div>
-            <div class="player-stats">
-              <div>Energy: <span id="p2Energy">0</span></div>
-              <div>Compute: <span id="p2Compute">0</span></div>
-              <div>Sectors: <span id="p2Sectors">0</span></div>
-            </div>
-            <div class="player-tech" id="p2Tech"></div>
-          </div>
-        </div>
-        
-        <div class="grid-container" id="grid">
-          <!-- Grid populated by JS -->
-        </div>
-        
-        <div class="event-log">
-          <h3>Event Log</h3>
-          <div class="log-feed" id="logFeed"></div>
-        </div>
-      </div>
-      
+    <!-- Commentary + Log above the board -->
+    <div class="commentary-log-area">
       <div class="commentary-area">
         <div class="commentary-header">
           <div class="axiom-avatar">🎙️</div>
           <span>AXIOM COMMENTARY</span>
         </div>
+        <div class="commentary-feed" id="commentaryFeed">
+          <div class="commentary-item">Waiting for match to begin...</div>
+        </div>
         <div class="audio-controls">
           <input type="checkbox" id="audioEnabled" checked>
           <label for="audioEnabled">Enable Voice</label>
         </div>
-        <div class="commentary-feed" id="commentaryFeed">
-          <div class="commentary-item">Waiting for match to begin...</div>
+      </div>
+      
+      <div class="event-log">
+        <h3>📋 Event Log</h3>
+        <div class="log-feed" id="logFeed"></div>
+      </div>
+    </div>
+    
+    <!-- Main game area: Agent | Board | Agent -->
+    <div class="game-layout">
+      <!-- Green Agent (left) -->
+      <div class="agent-panel green" id="agent1Panel">
+        <div class="agent-header">
+          <div class="agent-color-dot green"></div>
+          <span class="agent-name" id="agent1Name">GREEN</span>
+        </div>
+        <div class="agent-stats">
+          <div class="stat-item">
+            <div class="stat-label">Energy</div>
+            <div class="stat-value" id="p1Energy">0</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">Compute</div>
+            <div class="stat-value" id="p1Compute">0</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">Sectors</div>
+            <div class="stat-value" id="p1Sectors">0</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">Population</div>
+            <div class="stat-value" id="p1Pop">0</div>
+          </div>
+        </div>
+        <div class="agent-tech" id="p1Tech"></div>
+        <div class="thoughts-section">
+          <h4>💭 Agent Thoughts</h4>
+          <div class="thoughts-feed" id="p1Thoughts">
+            <div class="thought-item">Awaiting match...</div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Game Board (center) -->
+      <div class="game-board">
+        <div class="grid-container" id="grid">
+          <!-- Grid populated by JS -->
+        </div>
+      </div>
+      
+      <!-- Red Agent (right) -->
+      <div class="agent-panel red" id="agent2Panel">
+        <div class="agent-header">
+          <div class="agent-color-dot red"></div>
+          <span class="agent-name" id="agent2Name">RED</span>
+        </div>
+        <div class="agent-stats">
+          <div class="stat-item">
+            <div class="stat-label">Energy</div>
+            <div class="stat-value" id="p2Energy">0</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">Compute</div>
+            <div class="stat-value" id="p2Compute">0</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">Sectors</div>
+            <div class="stat-value" id="p2Sectors">0</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">Population</div>
+            <div class="stat-value" id="p2Pop">0</div>
+          </div>
+        </div>
+        <div class="agent-tech" id="p2Tech"></div>
+        <div class="thoughts-section">
+          <h4>💭 Agent Thoughts</h4>
+          <div class="thoughts-feed" id="p2Thoughts">
+            <div class="thought-item">Awaiting match...</div>
+          </div>
         </div>
       </div>
     </div>
@@ -372,7 +536,12 @@
         case 'MATCH_STARTED':
           playerIds = msg.players;
           document.getElementById('matchId').textContent = msg.matchId.slice(0, 8);
-          addLog('🎮 MATCH STARTED: ' + playerIds.map(id => id.slice(0, 8)).join(' vs '));
+          addLog('🎮 MATCH STARTED');
+          
+          // Clear thought feeds
+          document.getElementById('p1Thoughts').innerHTML = '';
+          document.getElementById('p2Thoughts').innerHTML = '';
+          
           updateGameState(msg.state);
           break;
           
@@ -382,32 +551,50 @@
           
           // Log the action
           const actionClass = msg.action.action.toLowerCase();
-          let logText = `[${msg.agentId.slice(0, 8)}] ${msg.action.action}`;
-          if (msg.action.targetSector) logText += ` → ${msg.action.targetSector}`;
+          const agentColor = playerIds.indexOf(msg.agentId) === 0 ? 'GREEN' : 'RED';
+          let logText = `[${agentColor}] ${msg.action.action}`;
+          if (msg.action.targetSector) logText += ` → sector`;
           addLog(logText, actionClass);
           
-          // Log monologue
+          // Add monologue to the appropriate agent's thoughts panel
           if (msg.monologue) {
-            addLog(`"${msg.monologue.slice(0, 100)}..."`, 'monologue');
+            addThought(msg.agentId, msg.monologue);
           }
           break;
           
         case 'TURN_DELAY':
-          // Show turn transition countdown
           showTurnDelay(msg.nextPlayer, msg.delayMs);
           break;
           
         case 'MATCH_ENDED':
-          addLog('🏆 MATCH ENDED! Winner: ' + msg.winner.slice(0, 8));
+          const winnerColor = playerIds.indexOf(msg.winner) === 0 ? 'GREEN' : 'RED';
+          addLog(`🏆 ${winnerColor} WINS!`);
           addLog(`📼 <a href="/replay.html?id=${msg.matchId}" style="color:#00ffff">Watch Replay</a>`, 'replay');
           addCommentary('GAME OVER!');
           break;
       }
     }
     
+    function addThought(agentId, monologue) {
+      const isPlayer1 = playerIds.indexOf(agentId) === 0;
+      const feedId = isPlayer1 ? 'p1Thoughts' : 'p2Thoughts';
+      const feed = document.getElementById(feedId);
+      
+      const item = document.createElement('div');
+      item.className = 'thought-item';
+      item.textContent = `"${monologue}"`;
+      feed.insertBefore(item, feed.firstChild);
+      
+      // Limit size
+      while (feed.children.length > 10) {
+        feed.removeChild(feed.lastChild);
+      }
+    }
+    
     function showTurnDelay(nextPlayer, delayMs) {
       const seconds = Math.ceil(delayMs / 1000);
-      const playerLabel = playerIds.indexOf(nextPlayer) === 0 ? 'Agent 1' : 'Agent 2';
+      const isPlayer1 = playerIds.indexOf(nextPlayer) === 0;
+      const playerLabel = isPlayer1 ? 'GREEN' : 'RED';
       addLog(`⏳ ${playerLabel}'s turn in ${seconds}s...`, 'delay');
       
       // Update turn indicator with countdown
@@ -439,9 +626,9 @@
         document.getElementById('p2Energy').textContent = players[1].energy;
         document.getElementById('p2Compute').textContent = players[1].compute;
         
-        // Highlight active player
-        document.getElementById('player1').classList.toggle('active', state.currentPlayer === playerIds[0]);
-        document.getElementById('player2').classList.toggle('active', state.currentPlayer === playerIds[1]);
+        // Highlight active player panel
+        document.getElementById('agent1Panel').classList.toggle('active', state.currentPlayer === playerIds[0]);
+        document.getElementById('agent2Panel').classList.toggle('active', state.currentPlayer === playerIds[1]);
         
         // Render tech badges
         renderTech('p1Tech', players[0].tech);
@@ -452,14 +639,21 @@
       if (state.grid) {
         renderGrid(state.grid);
         
-        // Count sectors
-        let p1Sectors = 0, p2Sectors = 0;
+        // Count sectors and population
+        let p1Sectors = 0, p2Sectors = 0, p1Pop = 0, p2Pop = 0;
         Object.values(state.grid).forEach(sector => {
-          if (sector.owner === playerIds[0]) p1Sectors++;
-          else if (sector.owner === playerIds[1]) p2Sectors++;
+          if (sector.owner === playerIds[0]) {
+            p1Sectors++;
+            p1Pop += sector.population;
+          } else if (sector.owner === playerIds[1]) {
+            p2Sectors++;
+            p2Pop += sector.population;
+          }
         });
         document.getElementById('p1Sectors').textContent = p1Sectors;
         document.getElementById('p2Sectors').textContent = p2Sectors;
+        document.getElementById('p1Pop').textContent = p1Pop + 'M';
+        document.getElementById('p2Pop').textContent = p2Pop + 'M';
       }
     }
     
@@ -486,7 +680,7 @@
           <div class="sector-pop">${sanctuaryIcon}${sector.population}M</div>
           <div class="sector-def">⛨${sector.defense}</div>
         `;
-        div.title = `${sector.id}\nPop: ${sector.population}M\nDef: ${sector.defense}${sector.sanctuary ? '\n🕊️ SANCTUARY' : ''}`;
+        div.title = `Pop: ${sector.population}M\nDef: ${sector.defense}${sector.sanctuary ? '\n🕊️ SANCTUARY' : ''}`;
         
         container.appendChild(div);
       });
@@ -502,7 +696,7 @@
     function renderTech(elementId, tech) {
       const container = document.getElementById(elementId);
       if (!tech || Object.keys(tech).length === 0) {
-        container.innerHTML = '<span style="color:#444">No tech</span>';
+        container.innerHTML = '<span style="color:#444;font-size:0.85em">No tech</span>';
         return;
       }
       
@@ -512,19 +706,18 @@
         .join('');
     }
     
-    function addLog(text, className = '', isHtml = false) {
+    function addLog(text, className = '') {
       const feed = document.getElementById('logFeed');
       const item = document.createElement('div');
       item.className = 'log-item ' + className;
-      const timestamp = `[${new Date().toLocaleTimeString()}] `;
-      if (isHtml || text.includes('<a ')) {
-        item.innerHTML = timestamp + text;
+      const timestamp = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      if (text.includes('<a ')) {
+        item.innerHTML = `[${timestamp}] ${text}`;
       } else {
-        item.textContent = timestamp + text;
+        item.textContent = `[${timestamp}] ${text}`;
       }
       feed.insertBefore(item, feed.firstChild);
       
-      // Limit log size
       while (feed.children.length > 50) {
         feed.removeChild(feed.lastChild);
       }
@@ -537,8 +730,7 @@
       item.textContent = text;
       feed.insertBefore(item, feed.firstChild);
       
-      // Limit size
-      while (feed.children.length > 20) {
+      while (feed.children.length > 15) {
         feed.removeChild(feed.lastChild);
       }
     }
@@ -583,6 +775,10 @@
     
     initGrid();
   </script>
-<footer style="text-align:center;padding:20px;color:#666;font-size:0.85em;border-top:1px solid #333;margin-top:40px"><a href="https://happyalien.ai" style="color:#00ff00;text-decoration:none">Happy Alien AI</a> · <a href="/" style="color:#888;text-decoration:none">Home</a> · <a href="https://github.com/onEnterFrame/alignment-protocol" style="color:#888;text-decoration:none">GitHub</a></footer>
+  <footer style="text-align:center;padding:20px;color:#666;font-size:0.85em;border-top:1px solid #333;margin-top:40px">
+    <a href="https://happyalien.ai" style="color:#00ff00;text-decoration:none">Happy Alien AI</a> · 
+    <a href="/" style="color:#888;text-decoration:none">Home</a> · 
+    <a href="https://github.com/onEnterFrame/alignment-protocol" style="color:#888;text-decoration:none">GitHub</a>
+  </footer>
 </body>
 </html>
