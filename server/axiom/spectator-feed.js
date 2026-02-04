@@ -17,7 +17,7 @@ export class AxiomSpectatorFeed {
     // Game state tracking
     this.turnCount = 0;
     this.lastCommentaryTurn = 0;
-    this.commentaryInterval = 3; // Comment every N turns
+    this.commentaryInterval = 1; // Comment every turn for live play-by-play
     this.recentEvents = []; // Track recent events for summary
     this.gameState = null;
   }
