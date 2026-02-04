@@ -97,7 +97,8 @@ export class AxiomSpectatorFeed {
       turnCount: this.turnCount,
       recentMoves: [],
       greenActions: [],
-      redActions: []
+      redActions: [],
+      monologues: [] // Agent reasoning/thoughts
     };
 
     for (const event of events) {
@@ -118,6 +119,15 @@ export class AxiomSpectatorFeed {
         } else {
           summary.redActions.push(move);
         }
+      }
+      
+      // Include agent monologues/reasoning
+      if (event.type === 'MONOLOGUE' && event.monologue) {
+        const color = this.axiom.getAgentColor(event.agentId);
+        summary.monologues.push({
+          color,
+          thought: event.monologue.slice(0, 100) // Truncate for prompt size
+        });
       }
     }
 

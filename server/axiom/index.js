@@ -124,7 +124,7 @@ Give ONE epic closing line crowning ${summary.winner} the winner. Reference the 
   }
 
   buildSummaryPrompt(summary) {
-    const { recentMoves, greenActions, redActions, turnCount } = summary;
+    const { recentMoves, greenActions, redActions, turnCount, monologues } = summary;
     
     // Describe what each side did
     const greenSummary = this.describeActions(greenActions, 'GREEN');
@@ -154,12 +154,20 @@ Give ONE epic closing line crowning ${summary.winner} the winner. Reference the 
       context += `Purges: ${purges.map(p => `${p.color} purged ${p.purged || '?'}M`).join(', ')}\n`;
     }
 
+    // Include agent reasoning/monologues
+    if (monologues && monologues.length > 0) {
+      context += `\nAgent reasoning:\n`;
+      for (const m of monologues) {
+        context += `${m.color}: "${m.thought}"\n`;
+      }
+    }
+
     // Add recent commentary to avoid
     if (this.recentCommentary.length > 0) {
       context += `\nAVOID similar phrasing to:\n${this.recentCommentary.slice(-3).map(c => `- "${c}"`).join('\n')}\n`;
     }
 
-    context += `\nSummarize in ONE sentence mentioning both GREEN and RED:`;
+    context += `\nSummarize in ONE sentence mentioning both GREEN and RED. You can reference their stated reasoning if interesting:`;
     
     return context;
   }
