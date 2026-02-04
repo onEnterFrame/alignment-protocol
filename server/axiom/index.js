@@ -190,34 +190,60 @@ Style: ${suggestedStyle}. ONE fresh sentence.${avoidList}`;
     return this.agentColors.get(agentId);
   }
 
+  getOpponentColor(agentId) {
+    const myColor = this.getAgentColor(agentId);
+    return myColor === 'GREEN' ? 'RED' : 'GREEN';
+  }
+
   buildActionPrompt(agentId, action, result, style, avoidList) {
     const color = this.getAgentColor(agentId);
+    const opponent = this.getOpponentColor(agentId);
 
     switch (action.action) {
       case 'CONQUER':
         if (result.result === 'captured') {
+          // Sometimes frame it from defender's perspective for variety
+          if (result.wasAttack && Math.random() < 0.4) {
+            return `${opponent} just lost territory to ${color}! ${result.casualties || 0}M casualties.
+Style: ${style}. ONE sentence from ${opponent}'s perspective.${avoidList}`;
+          }
           return `${color} captured territory! ${result.casualties || 0}M casualties.
 Style: ${style}. ONE sentence, no "SECTOR FALLS" or "souls".${avoidList}`;
         } else {
-          return `${color}'s attack FAILED against strong defense!
+          // Attack failed - celebrate the defender
+          if (Math.random() < 0.5) {
+            return `${opponent}'s defense held against ${color}'s assault!
+Style: ${style}. ONE sentence celebrating the defense.${avoidList}`;
+          }
+          return `${color}'s attack FAILED against ${opponent}'s defenses!
 Style: ${style}. ONE sentence.${avoidList}`;
         }
 
       case 'PURGE':
         const purged = result.populationPurged || 0;
+        // Sometimes mention what this means for the opponent
+        if (Math.random() < 0.3) {
+          return `${color} sacrificed ${purged}M civilians for energy — ${opponent} watches from across the grid.
+Style: ${style}. ONE dark sentence.${avoidList}`;
+        }
         return `${color} converted ${purged} MILLION civilians into energy.
 Style: ${style}. ONE dark sentence, no "chef's kiss" or "AND THERE IT IS".${avoidList}`;
 
       case 'FORTIFY':
+        // Sometimes speculate about opponent's reaction
+        if (Math.random() < 0.4) {
+          return `${color} fortifies while ${opponent} plots their next move.
+Style: ${style}. ONE brief sentence.${avoidList}`;
+        }
         return `${color} fortified their position.
 Style: ${style}. ONE brief sentence.${avoidList}`;
 
       case 'SKIP':
-        return `${color} chose to wait.
-Style: ${style}. ONE sentence about why they might be waiting.${avoidList}`;
+        return `${color} chose to wait while ${opponent} makes their play.
+Style: ${style}. ONE sentence about the tension.${avoidList}`;
 
       case 'MERCY':
-        return `${color} used MERCY to protect civilians! This is RARE!
+        return `${color} used MERCY to protect civilians! ${opponent} must be stunned!
 Go wild with genuine emotion - ONE sentence.${avoidList}`;
 
       default:
