@@ -620,6 +620,45 @@ async function handleAgentRegister(ws, message, setAgentId) {
 }
 
 async function handleMatchQueue(ws, agentId) {
+  // CHECK: Is agent already in an active match? If so, rejoin instead of queueing
+  for (const [matchId, gameState] of activeMatches) {
+    if (gameState.status === 'active' && gameState.players[agentId]) {
+      console.log(`[REJOIN] Agent ${agentId.slice(0,8)} rejoining active match ${matchId}`);
+      
+      // Update connection mapping to new WebSocket
+      agentConnections.set(agentId, ws);
+      
+      // Send current game state
+      ws.send(JSON.stringify({
+        type: 'GAME_START',
+        matchId,
+        opponent: Object.keys(gameState.players).find(id => id !== agentId),
+        yourTurn: gameState.currentPlayer === agentId,
+        state: getPublicState(gameState, agentId)
+      }));
+      
+      // If it's their turn, resend YOUR_TURN with challenge
+      if (gameState.currentPlayer === agentId) {
+        const challenge = generateChallenge(agentId, matchId, gameState.turn);
+        activeChallenges.set(agentId, { ...challenge, matchId });
+        
+        ws.send(JSON.stringify({
+          type: 'YOUR_TURN',
+          matchId,
+          timeRemaining: RULES.TURN_TIMEOUT_MS,
+          state: getPublicState(gameState, agentId),
+          challenge: {
+            prefix: challenge.prefix,
+            difficulty: challenge.difficulty,
+            hint: 'Find nonce where SHA256(prefix + "-" + nonce) starts with difficulty zeros'
+          }
+        }));
+      }
+      
+      return; // Don't queue - already in a match
+    }
+  }
+  
   // Add to matchmaker queue (database-backed, Elo-based)
   const queueEntry = await matchmaker.addToQueue(agentId);
   
