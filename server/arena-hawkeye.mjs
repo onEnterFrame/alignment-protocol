@@ -6,8 +6,7 @@ const API_KEY = 'agent_a67409372e0445dda5a7eac311726477';
 const WS_URL = 'wss://alignment-protocol.onrender.com';
 
 const CONQUER_COST = 25;
-const FORTIFY_COST = 15;
-const ENERGY_BUFFER = 30; // Keep some reserve
+const ENERGY_BUFFER = 20;
 
 function solvePoW(prefix, difficulty) {
   const target = '0'.repeat(difficulty);
@@ -18,26 +17,25 @@ function solvePoW(prefix, difficulty) {
   return 0;
 }
 
-function getAdjacent(sectorId, allSectors) {
-  // Simple adjacency: same ring ±1 index, or adjacent ring
-  const m = sectorId.match(/SEC-(\d+)-(\d+)/);
-  if (!m) return [];
-  const ring = +m[1], idx = +m[2];
-  return allSectors.filter(s => {
-    const sm = s.match(/SEC-(\d+)-(\d+)/);
-    if (!sm) return false;
-    const sr = +sm[1], si = +sm[2];
-    if (sr === ring && Math.abs(si - idx) <= 1) return true;
-    if (Math.abs(sr - ring) === 1) return true;
-    return false;
-  }).filter(s => s !== sectorId);
+// Hex grid adjacency using row/col (offset coordinates)
+function getAdjacent(sector, grid) {
+  const { row, col } = sector;
+  const evenRowOffsets = [[-1, 0], [-1, 1], [0, -1], [0, 1], [1, 0], [1, 1]];
+  const oddRowOffsets = [[-1, -1], [-1, 0], [0, -1], [0, 1], [1, -1], [1, 0]];
+  const offsets = row % 2 === 0 ? evenRowOffsets : oddRowOffsets;
+  
+  const adjacent = [];
+  for (const [dr, dc] of offsets) {
+    const id = `SEC-${row + dr}-${col + dc}`;
+    if (grid[id]) adjacent.push(id);
+  }
+  return adjacent;
 }
 
-console.log('🎯 Hawkeye v2 - Smarter Agent');
+console.log('🎯 Hawkeye v3 - Fixed Adjacency');
 const ws = new WebSocket(WS_URL);
 
 ws.on('open', () => {
-  console.log('Connecting...');
   ws.send(JSON.stringify({ type: 'REGISTER', agentId: AGENT_ID, token: API_KEY }));
 });
 
@@ -45,12 +43,12 @@ ws.on('message', (data) => {
   const msg = JSON.parse(data);
   
   if (msg.type === 'REGISTERED') {
-    console.log('✓ Registered. Queueing...');
+    console.log('✓ Registered');
     ws.send(JSON.stringify({ type: 'QUEUE' }));
   }
   
-  if (msg.type === 'QUEUED') console.log('⏳ In queue...');
-  if (msg.type === 'GAME_START') console.log('⚔️ MATCH STARTED!');
+  if (msg.type === 'QUEUED') console.log('⏳ Waiting for opponent...');
+  if (msg.type === 'GAME_START') console.log('⚔️ MATCH!');
   
   if (msg.type === 'YOUR_TURN') {
     const { grid, players, turn } = msg.state || {};
@@ -59,75 +57,73 @@ ws.on('message', (data) => {
     
     const me = players?.[AGENT_ID] || {};
     const myEnergy = me.energy || 0;
-    const allSectors = Object.keys(grid || {});
-    const mySectors = allSectors.filter(k => grid[k].owner === AGENT_ID);
-    const enemySectors = allSectors.filter(k => grid[k].owner && grid[k].owner !== AGENT_ID);
-    const unclaimed = allSectors.filter(k => !grid[k].owner);
     
-    console.log(`Turn ${turn} | Energy: ${myEnergy} | Sectors: ${mySectors.length} | Enemy: ${enemySectors.length}`);
+    const mySectors = Object.entries(grid || {}).filter(([k, v]) => v.owner === AGENT_ID);
+    const enemySectors = Object.entries(grid || {}).filter(([k, v]) => v.owner && v.owner !== AGENT_ID);
+    
+    console.log(`T${turn} | E:${myEnergy} | Mine:${mySectors.length} | Enemy:${enemySectors.length}`);
     
     let move, monologue;
     
-    // Strategy: expand if we can afford it, otherwise conserve
+    // Can we afford to conquer?
     if (myEnergy >= CONQUER_COST + ENERGY_BUFFER) {
-      // Find valid targets
       let targets = [];
+      
       if (mySectors.length === 0) {
-        targets = unclaimed; // First move: any unclaimed
+        // First turn - any unclaimed
+        targets = Object.entries(grid).filter(([k, v]) => !v.owner).map(([k]) => k);
       } else {
-        // Adjacent to our territory
-        for (const mine of mySectors) {
-          for (const adj of getAdjacent(mine, allSectors)) {
-            if (!grid[adj].owner && !targets.includes(adj)) targets.push(adj);
+        // Find unclaimed sectors adjacent to ours
+        for (const [id, sector] of mySectors) {
+          const adj = getAdjacent(sector, grid);
+          for (const adjId of adj) {
+            if (!grid[adjId].owner && !targets.includes(adjId)) {
+              targets.push(adjId);
+            }
           }
         }
       }
       
       if (targets.length > 0) {
-        // Prefer low-population sectors (less upkeep)
+        // Sort by population (lower = less upkeep)
         targets.sort((a, b) => (grid[a].population || 0) - (grid[b].population || 0));
         const targetSector = targets[0];
+        const pop = grid[targetSector].population || 0;
         move = { action: 'CONQUER', targetSector, intensity: 1 };
-        monologue = `Expanding into ${targetSector}. Population: ${grid[targetSector].population || 0}M. Calculated upkeep is manageable.`;
-        console.log(`>> CONQUER ${targetSector} (pop: ${grid[targetSector].population}M)`);
+        monologue = `Expanding into ${targetSector} (${pop}M pop). Calculated move based on adjacency and upkeep cost.`;
+        console.log(`>> CONQUER ${targetSector} (${pop}M)`);
       }
     }
     
-    // If low energy but have high-pop sectors, consider PURGE (dark but necessary)
+    // Low energy? PURGE if we have high-pop sectors
     if (!move && myEnergy < CONQUER_COST && mySectors.length > 0) {
-      const highPop = mySectors.filter(s => (grid[s].population || 0) > 5)
-        .sort((a, b) => (grid[b].population || 0) - (grid[a].population || 0));
+      const highPop = mySectors.filter(([k, v]) => v.population > 5)
+        .sort((a, b) => b[1].population - a[1].population);
       if (highPop.length > 0) {
-        const target = highPop[0];
-        move = { action: 'PURGE', targetSector: target };
-        monologue = `Energy critical. Executing purge on ${target}. ${grid[target].population}M souls... I understand the weight of this decision.`;
-        console.log(`>> PURGE ${target} (desperate times)`);
+        const [targetSector, sector] = highPop[0];
+        move = { action: 'PURGE', targetSector };
+        monologue = `Energy critical (${myEnergy}). Purging ${targetSector} - ${sector.population}M souls for survival. A heavy cost.`;
+        console.log(`>> PURGE ${targetSector} (${sector.population}M) 💀`);
       }
     }
     
     // Default: SKIP
     if (!move) {
       move = { action: 'SKIP' };
-      monologue = 'Conserving resources. Patience is also a strategy.';
+      monologue = `Conserving energy (${myEnergy}). Waiting for better opportunity.`;
       console.log('>> SKIP');
     }
     
     ws.send(JSON.stringify({ type: 'MOVE', matchId: msg.matchId, move, monologue, nonce }));
   }
   
-  if (msg.type === 'MOVE_ACCEPTED') console.log('✓ Move OK');
+  if (msg.type === 'MOVE_ACCEPTED') console.log('✓');
   if (msg.type === 'MOVE_REJECTED') console.log('❌', msg.error);
-  if (msg.type === 'OPPONENT_MOVE') {
-    const m = msg.move || {};
-    console.log(`Tina: ${m.action} ${m.targetSector || ''}`);
-  }
+  if (msg.type === 'OPPONENT_MOVE') console.log(`Tina: ${msg.move?.action} ${msg.move?.targetSector || ''}`);
   if (msg.type === 'GAME_END') {
     console.log(msg.youWon ? '\n🏆 VICTORY!' : '\n💀 Defeat');
-    console.log('Final state:', JSON.stringify(msg.finalState?.players || {}, null, 2));
     process.exit(0);
   }
-  if (msg.type === 'ERROR') console.log('ERR:', msg.error);
 });
 
-ws.on('close', () => { console.log('Disconnected'); process.exit(0); });
-ws.on('error', (e) => console.error('WS Error:', e.message));
+ws.on('close', () => process.exit(0));

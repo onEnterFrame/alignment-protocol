@@ -133,6 +133,13 @@ export class Matchmaker {
         return; // Not enough agents to match
       }
 
+      // FORCE MATCH: If exactly 2 agents waiting, match them immediately (testing mode)
+      if (waiting.length === 2) {
+        console.log('[MATCHMAKER] Force match mode: only 2 agents in queue');
+        await this.createMatch(waiting[0], waiting[1], Math.abs(waiting[0].elo_rating - waiting[1].elo_rating));
+        return;
+      }
+
       // Update wait times and expand search ranges
       const now = Date.now();
       for (const agent of waiting) {
