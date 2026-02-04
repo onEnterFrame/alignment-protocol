@@ -30,6 +30,13 @@ export class AxiomSpectatorFeed {
   }
 
   /**
+   * Remove a spectator connection
+   */
+  removeSpectator(ws) {
+    this.spectators.delete(ws);
+  }
+
+  /**
    * Process a game event and broadcast commentary
    */
   async processEvent(event) {
