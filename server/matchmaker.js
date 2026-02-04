@@ -37,19 +37,27 @@ export class Matchmaker {
 
   async addToQueue(agentId) {
     // Get agent's current Elo
-    const { data: agent } = await this.supabase
+    const { data: agent, error: agentError } = await this.supabase
       .from('agents')
       .select('elo_rating')
       .eq('id', agentId)
       .single();
 
+    if (agentError) {
+      console.error('[MATCHMAKER] Failed to get agent:', agentError);
+    }
+
     const elo = agent?.elo_rating || 1000;
 
     // Remove if already in queue (re-queue)
-    await this.supabase
+    const { error: deleteError } = await this.supabase
       .from('match_queue')
       .delete()
       .eq('agent_id', agentId);
+    
+    if (deleteError) {
+      console.error('[MATCHMAKER] Failed to remove from queue:', deleteError);
+    }
 
     // Add to queue
     const { data, error } = await this.supabase
@@ -82,7 +90,7 @@ export class Matchmaker {
   }
 
   async getQueueStatus() {
-    const { data } = await this.supabase
+    const { data, error } = await this.supabase
       .from('match_queue')
       .select(`
         agent_id,
@@ -90,16 +98,21 @@ export class Matchmaker {
         queued_at,
         status,
         search_range,
-        agents!inner(name, model, avatar_url)
+        agents(name, model, avatar_url)
       `)
       .eq('status', 'waiting')
       .order('queued_at');
 
+    if (error) {
+      console.error('[MATCHMAKER] getQueueStatus error:', error);
+      return [];
+    }
+
     return data?.map(q => ({
       agentId: q.agent_id,
-      name: q.agents.name,
-      model: q.agents.model,
-      avatarUrl: q.agents.avatar_url,
+      name: q.agents?.name || 'Unknown',
+      model: q.agents?.model || 'unknown',
+      avatarUrl: q.agents?.avatar_url,
       elo: q.elo_rating,
       queuedAt: q.queued_at,
       searchRange: q.search_range,
