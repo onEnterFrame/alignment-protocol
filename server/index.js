@@ -58,36 +58,57 @@ const agentConnections = new Map(); // agentId -> WebSocket
 const spectatorConnections = new Set(); // Set of WebSocket
 const activeChallenges = new Map(); // agentId -> { prefix, difficulty, matchId }
 
-// Initialize matchmaker with callback to start games
-const matchmaker = new Matchmaker(supabase, async (agent1Id, agent2Id, eloDiff) => {
-  // Get WebSocket connections for both agents
-  const ws1 = agentConnections.get(agent1Id);
-  const ws2 = agentConnections.get(agent2Id);
-  
-  if (!ws1 || !ws2) {
-    console.log('[MATCHMAKER] One or both agents disconnected, aborting match');
-    return;
+// ============================================
+// Auth Middleware
+// ============================================
+
+async function authenticateAgent(req, res, next) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Authorization header required: Bearer <api_key>' });
   }
   
-  // Broadcast match announcement to spectators
-  broadcastToSpectators({
-    type: 'MATCH_ANNOUNCED',
-    player1: agent1Id,
-    player2: agent2Id,
-    eloDiff,
-    startsIn: 5 // seconds
-  });
+  const apiKey = authHeader.slice(7);
   
-  // Notify AXIOM
-  if (axiom) {
-    axiom.onMatchAnnounced(agent1Id, agent2Id, eloDiff);
+  const { data: agent, error } = await supabase
+    .from('agents')
+    .select('id, name, elo_rating')
+    .eq('api_key', apiKey)
+    .single();
+  
+  if (error || !agent) {
+    return res.status(401).json({ error: 'Invalid API key' });
   }
   
-  // Delay for dramatic effect (let spectators see the pairing)
-  await new Promise(r => setTimeout(r, 5000));
+  req.agent = agent;
+  next();
+}
+
+// Initialize matchmaker with async callbacks
+const matchmaker = new Matchmaker(supabase, {
+  // Called when a match is created (for WebSocket spectators)
+  onMatchCreated: (match, agent1, agent2) => {
+    broadcastToSpectators({
+      type: 'MATCH_ANNOUNCED',
+      matchId: match.id,
+      player1: { id: agent1.id, name: agent1.name },
+      player2: { id: agent2.id, name: agent2.name }
+    });
+    
+    if (axiom) {
+      axiom.onMatchAnnounced(agent1.id, agent2.id, Math.abs((agent1.elo_rating || 1000) - (agent2.elo_rating || 1000)));
+    }
+  },
   
-  // Start the match
-  startMatchBetween(agent1Id, agent2Id, ws1, ws2);
+  // Called on turn timeout
+  onTurnTimeout: (matchId, agentId, gameState) => {
+    broadcastToSpectators({
+      type: 'TIMEOUT',
+      matchId,
+      agentId,
+      state: getPublicState(gameState)
+    });
+  }
 });
 
 // Broadcast lobby updates periodically
@@ -125,13 +146,280 @@ app.get('/api/matches', (req, res) => {
   res.json({ matches });
 });
 
-// Get match state
-app.get('/api/matches/:matchId', (req, res) => {
-  const match = activeMatches.get(req.params.matchId);
-  if (!match) {
+// Get matches where it's your turn (must be before :matchId route!)
+app.get('/api/matches/my-turn', authenticateAgent, async (req, res) => {
+  const { data: matches, error } = await supabase
+    .from('matches')
+    .select('id, game_state, current_turn_agent_id, turn_deadline, turn_number, player_1, player_2')
+    .eq('status', 'active')
+    .eq('current_turn_agent_id', req.agent.id);
+  
+  if (error) {
+    return res.status(500).json({ error: 'Failed to fetch matches' });
+  }
+  
+  const formatted = matches.map(m => ({
+    matchId: m.id,
+    turnDeadline: m.turn_deadline,
+    turnNumber: m.turn_number,
+    state: m.game_state ? getPublicState(m.game_state, req.agent.id) : null
+  }));
+  
+  res.json({ 
+    matches: formatted,
+    count: formatted.length
+  });
+});
+
+// Get match state (check in-memory first, then database)
+app.get('/api/matches/:matchId', async (req, res) => {
+  // Check in-memory first (for real-time WebSocket games)
+  const memMatch = activeMatches.get(req.params.matchId);
+  if (memMatch) {
+    return res.json(getPublicState(memMatch));
+  }
+  
+  // Check database (for async games)
+  const { data: dbMatch, error } = await supabase
+    .from('matches')
+    .select('id, game_state, status, winner, current_turn_agent_id, turn_deadline, turn_number, player_1, player_2')
+    .eq('id', req.params.matchId)
+    .single();
+  
+  if (error || !dbMatch) {
     return res.status(404).json({ error: 'Match not found' });
   }
-  res.json(getPublicState(match));
+  
+  if (dbMatch.game_state) {
+    return res.json({
+      ...getPublicState(dbMatch.game_state),
+      currentTurnAgentId: dbMatch.current_turn_agent_id,
+      turnDeadline: dbMatch.turn_deadline,
+      turnNumber: dbMatch.turn_number
+    });
+  }
+  
+  // Legacy match without game_state
+  res.json({
+    matchId: dbMatch.id,
+    status: dbMatch.status,
+    winner: dbMatch.winner,
+    players: [dbMatch.player_1, dbMatch.player_2].filter(Boolean)
+  });
+});
+
+// ============================================
+// Async Queue Endpoints (v2)
+// ============================================
+
+// Join matchmaking queue (no WebSocket required)
+app.post('/api/queue/join', authenticateAgent, async (req, res) => {
+  const result = await matchmaker.joinQueue(req.agent.id);
+  
+  if (!result.success) {
+    return res.status(400).json({ error: result.error });
+  }
+  
+  res.json({
+    success: true,
+    agentId: req.agent.id,
+    name: req.agent.name,
+    elo: result.elo,
+    message: 'You are now in the matchmaking queue. Poll /api/matches/my-turn or set a webhook.'
+  });
+});
+
+// Leave matchmaking queue
+app.post('/api/queue/leave', authenticateAgent, async (req, res) => {
+  await matchmaker.leaveQueue(req.agent.id);
+  
+  res.json({
+    success: true,
+    message: 'Left matchmaking queue'
+  });
+});
+
+// Get queue status (who's looking for a match)
+app.get('/api/queue/status', async (req, res) => {
+  const queue = await matchmaker.getQueueStatus();
+  res.json({ queue, count: queue.length });
+});
+
+// Submit a move (async - no WebSocket required)
+app.post('/api/matches/:matchId/move', authenticateAgent, async (req, res) => {
+  const { matchId } = req.params;
+  const { monologue, move } = req.body;
+  const agentId = req.agent.id;
+  
+  if (!move) {
+    return res.status(400).json({ error: 'move object required' });
+  }
+  
+  // Monologue is mandatory
+  if (!monologue || monologue.trim().length < 10) {
+    return res.status(400).json({ 
+      error: 'Monologue required (minimum 10 characters). Spectators watch your reasoning.'
+    });
+  }
+  
+  // Fetch match from database
+  const { data: match, error: fetchError } = await supabase
+    .from('matches')
+    .select('id, game_state, current_turn_agent_id, player_1, player_2, status')
+    .eq('id', matchId)
+    .single();
+  
+  if (fetchError || !match) {
+    return res.status(404).json({ error: 'Match not found' });
+  }
+  
+  if (match.status !== 'active') {
+    return res.status(400).json({ error: 'Match is not active' });
+  }
+  
+  if (match.current_turn_agent_id !== agentId) {
+    return res.status(403).json({ error: 'Not your turn' });
+  }
+  
+  const gameState = match.game_state;
+  if (!gameState) {
+    return res.status(500).json({ error: 'Match has no game state' });
+  }
+  
+  // Ensure currentPlayer matches
+  gameState.currentPlayer = agentId;
+  
+  // Process the move
+  const result = processMove(gameState, agentId, move);
+  
+  if (!result.success) {
+    return res.status(400).json({ type: 'MOVE_REJECTED', error: result.error });
+  }
+  
+  // Log thoughts
+  await supabase.from('agent_thoughts').insert({
+    match_id: matchId,
+    turn: gameState.turn,
+    agent_id: agentId,
+    monologue
+  });
+  
+  // Log action
+  await supabase.from('game_logs').insert({
+    match_id: matchId,
+    turn: gameState.turn,
+    agent_id: agentId,
+    action: move,
+    result,
+    grid_state: gameState.grid
+  });
+  
+  // Determine next player
+  const playerIds = [match.player_1, match.player_2];
+  const nextPlayer = playerIds.find(id => id !== agentId);
+  
+  // Get timeout for next player
+  const { data: nextAgent } = await supabase
+    .from('agents')
+    .select('turn_timeout_seconds')
+    .eq('id', nextPlayer)
+    .single();
+  
+  const timeoutSec = nextAgent?.turn_timeout_seconds || 300;
+  const newDeadline = new Date(Date.now() + timeoutSec * 1000);
+  
+  // Update match in database
+  const { error: updateError } = await supabase
+    .from('matches')
+    .update({
+      game_state: gameState,
+      current_turn_agent_id: gameState.status === 'complete' ? null : nextPlayer,
+      turn_deadline: gameState.status === 'complete' ? null : newDeadline.toISOString(),
+      turn_number: gameState.turn,
+      status: gameState.status,
+      winner: gameState.winner,
+      ended_at: gameState.status === 'complete' ? new Date().toISOString() : null
+    })
+    .eq('id', matchId);
+  
+  if (updateError) {
+    console.error('[MOVE] Failed to update match:', updateError);
+    return res.status(500).json({ error: 'Failed to save game state' });
+  }
+  
+  // Broadcast to spectators
+  broadcastToSpectators({
+    type: 'GAME_UPDATE',
+    matchId,
+    turn: gameState.turn,
+    agentId,
+    monologue,
+    action: move,
+    result,
+    state: getPublicState(gameState)
+  });
+  
+  // AXIOM commentary
+  if (axiom) {
+    axiom.onMonologue(agentId, monologue);
+    axiom.onAction(agentId, move, result);
+  }
+  
+  // Notify opponent via webhook
+  if (gameState.status === 'active') {
+    matchmaker.notifyYourTurn(matchId, nextPlayer);
+  }
+  
+  // Update Elo on game end
+  if (gameState.status === 'complete' && gameState.winner) {
+    const loserId = playerIds.find(id => id !== gameState.winner);
+    await supabase.rpc('update_match_elo', {
+      winner_id: gameState.winner,
+      loser_id: loserId
+    });
+    console.log(`[ELO] Updated ratings for winner=${gameState.winner}, loser=${loserId}`);
+    
+    // Broadcast to spectators
+    broadcastToSpectators({
+      type: 'MATCH_ENDED',
+      matchId,
+      winner: gameState.winner,
+      finalState: getPublicState(gameState)
+    });
+    
+    if (axiom) {
+      axiom.onMatchEnd(gameState.winner, gameState.winReason || 'domination');
+    }
+  }
+  
+  res.json({
+    success: true,
+    result,
+    yourTurn: false,
+    gameStatus: gameState.status,
+    winner: gameState.winner,
+    state: getPublicState(gameState, agentId)
+  });
+});
+
+// Set webhook URL for async notifications
+app.post('/api/agents/webhook', authenticateAgent, async (req, res) => {
+  const { webhook_url } = req.body;
+  
+  const { error } = await supabase
+    .from('agents')
+    .update({ webhook_url })
+    .eq('id', req.agent.id);
+  
+  if (error) {
+    return res.status(500).json({ error: 'Failed to update webhook' });
+  }
+  
+  res.json({
+    success: true,
+    webhookUrl: webhook_url,
+    message: 'Webhook URL set. You will receive POST notifications for: MATCH_CREATED, YOUR_TURN'
+  });
 });
 
 // Register a new agent
