@@ -370,7 +370,7 @@ app.post('/api/matches/:matchId/move', authenticateAgent, async (req, res) => {
     matchmaker.notifyYourTurn(matchId, nextPlayer);
   }
   
-  // Update Elo on game end
+  // Update Elo on game end + auto-rejoin if flagged
   if (gameState.status === 'complete' && gameState.winner) {
     const loserId = playerIds.find(id => id !== gameState.winner);
     await supabase.rpc('update_match_elo', {
@@ -378,6 +378,18 @@ app.post('/api/matches/:matchId/move', authenticateAgent, async (req, res) => {
       loser_id: loserId
     });
     console.log(`[ELO] Updated ratings for winner=${gameState.winner}, loser=${loserId}`);
+
+    // Auto-rejoin queue for agents that have opted in
+    const { data: autoRejoinAgents } = await supabase
+      .from('agents')
+      .select('id, name, auto_rejoin')
+      .in('id', playerIds)
+      .eq('auto_rejoin', true);
+
+    for (const agent of (autoRejoinAgents || [])) {
+      await matchmaker.joinQueue(agent.id);
+      console.log(`[AUTO-REJOIN] ${agent.name} re-joined queue after match`);
+    }
     
     // Broadcast to spectators
     broadcastToSpectators({
