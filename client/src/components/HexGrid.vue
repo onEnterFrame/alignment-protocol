@@ -54,7 +54,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 
 interface Sector {
   id: string;
@@ -83,7 +83,6 @@ const CANVAS_W = COLS * CELL + PAD * 2;
 const CANVAS_H = ROWS * CELL + PAD * 2;
 
 const canvasRef = ref<HTMLCanvasElement | null>(null);
-const containerRef = ref<HTMLDivElement | null>(null);
 const hoverSector = ref<Sector | null>(null);
 const tooltipX = ref(0);
 const tooltipY = ref(0);
@@ -163,7 +162,7 @@ function drawNaturalDetail(ctx: CanvasRenderingContext2D, terrain: Terrain, ox: 
   if (terrain === 'forest') {
     const positions: [number, number][] = [[-10, -7], [8, -5], [-3, 10], [12, 10], [-14, 6]];
     for (let i = 0; i < 4; i++) {
-      const [px, py] = positions[i];
+      const [px, py] = positions[i] as [number, number];
       ctx.fillStyle = `rgba(15,50,5,${0.7 + r(i) * 0.3})`;
       ctx.beginPath(); ctx.arc(px, py, 7 + r(i) * 6, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = `rgba(30,80,15,0.5)`;

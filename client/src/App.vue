@@ -279,7 +279,6 @@
 import { ref, computed, onMounted, nextTick } from 'vue';
 import { createClient } from '@supabase/supabase-js';
 import HexGrid from './components/HexGrid.vue';
-import PlayerStats from './components/PlayerStats.vue';
 import NeuralEntry from './components/NeuralEntry.vue';
 
 interface ThoughtEntry {
